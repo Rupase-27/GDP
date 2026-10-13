@@ -1,9 +1,8 @@
  
 #include <SimpleFOC.h> 
 
-  
 
-// Encoder
+// Encoder (STM32 selects one encoder - CS line goes LOW while the other encoders' CS lines remain HIGH)
 MagneticEncoderSPI encoder1 = MagneticEncoderSPI(AS5048A_SPI, D10); // Motor 1 (Guidewire Translation) 
 MagneticEncoderSPI encoder2 = MagneticEncoderSPI(AS5048A_SPI, PB12);  // Motor 2 (Guidewire Rotation) 
 MagneticEncoderSPI encoder3 = MagneticEncoderSPI(AS5048A_SPI, PB11);  // Motor 3 (Catheter Translation) 
