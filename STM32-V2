@@ -31,7 +31,7 @@ const float MAX_TRACKING_ERROR = 0.4; // Max allowable angle lag in radians befo
 // USER INTERFACE (SimpleFOC Commander for live tuning)
 Commander commander = Commander(Serial);
 void onMotor1(char* cmd){ commander.motor(&motor1, cmd); }
-voidльныvoid onMotor2(char* cmd){ commander.motor(&motor2, cmd); } // Fixed typo below
+void void onMotor2(char* cmd){ commander.motor(&motor2, cmd); } // Fixed typo below
 void onMotor2(char* cmd){ commander.motor(&motor2, cmd); }
 void onMotor3(char* cmd){ commander.motor(&motor3, cmd); }
 
