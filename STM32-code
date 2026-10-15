@@ -109,7 +109,7 @@ void loop() {
 
 void checkSnagResistance() { 
 
-  // Difference between where the motor should be compared to encoder position) 
+  // Difference between where the motor should be compared to encoder position 
   float error1 = abs(target_angle1 - encoder1.getAngle()); 
   float error3 = abs(target_angle3 - encoder3.getAngle()); 
 
@@ -118,7 +118,6 @@ void checkSnagResistance() {
     Serial.println("ALERT: Snag detected on Guidewire Translation (Axis 1)"); 
     triggerEmergencyStop(); 
   } 
-
   if (error3 > MAX_TRACKING_ERROR) { 
     Serial.println("ALERT: Snag detected on Catheter Translation (Axis 3)"); 
     triggerEmergencyStop(); 
