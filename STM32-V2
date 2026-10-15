@@ -16,9 +16,9 @@ BLDCMotor motor2 = BLDCMotor(11);
 BLDCMotor motor3 = BLDCMotor(11); 
 
 // SAFETY & LIMIT SWITCH PINS
-const int LIMIT_SWITCH_1 = PC13; // Guidewire translation home switch 
+const int LIMIT_SWITCH_1 = PB13; // Guidewire translation home switch 
 const int LIMIT_SWITCH_3 = PC14; // Catheter translation home switch 
-const int ESTOP_PIN      = PC15; // Hardwired Emergency Stop button 
+const int ESTOP_PIN      = PC3; // Hardwired Emergency Stop button 
 
 // Target positions (in radians) 
 float target_angle1 = 0; 
