@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QGridLayout,
@@ -197,6 +198,8 @@ class MainWindow(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    stylePath = Path(__file__).parent / "style.qss"
+    app.setStyleSheet(stylePath.read_text())
     win = MainWindow()
     win.show()
     sys.exit(app.exec_())

@@ -1,0 +1,52 @@
+QMainWindow, QWidget {
+    background-color: #1e1e26;
+    color: #e6e6e6;
+    font-size: 18px;
+}
+
+QGroupBox {
+    border: 2px solid #3a3d4a;
+    border-radius: 8px;
+    margin-top: 12px;
+    padding: 8px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 4px;
+    font-size: 24px;
+}
+
+QPushButton {
+    background-color: #2d303c;
+    border: 2px solid #3a3d4a;
+    border-radius: 5px;
+    padding: 8px;
+}
+QPushButton:hover   { background-color: #3a3e4d; }
+QPushButton:pressed { background-color: #327ed5; }
+QPushButton:checked { background-color: #327ed5; }
+
+QPushButton:disabled {
+    background-color: #1a1b21;
+    color: #5c5f6b;
+    border: 1px solid #2a2c36;
+}
+
+QSlider::groove:horizontal {
+    height: 6px;
+    background: #3a3d4a;
+    border-radius: 3px;
+}
+QSlider::handle:horizontal {
+    background: #4b78e6;
+    width: 18px;
+    margin: -6px 0;
+    border-radius: 2px;
+}
+
+QTextEdit {
+    background-color: #252a3b;
+    border: 2px solid #3a3d4a;
+    border-radius: 8px;
+}
