@@ -1,0 +1,121 @@
+//
+//  MOTOR CONNECTIONS
+//
+//  Initalises FOC controller and links motors to AS5048A encoders.
+//  
+//  OVERVIEW
+//
+//  User will input velocity of movement and direction using external 'game'
+//  controller and the motors will move accordingly. Encoders are used to 
+//  track the position and angle of the motor.
+//
+//  checkStop() - Checks the external emergency stop button
+//
+//  triggerEmergencyStop() - Disables all motors during an issue
+//
+//  setup() - Initalisation and linking
+//
+//  loop() - FOC feedback for smooth and highly efficient motor movement
+//
+//////////////////////////////////////////////////////////////////////////
+
+#include <SimpleFOC.h>
+
+MagneticSensorSPI encoder1 = MagneticSensorSPI(AS5048_SPI, D10);
+MagneticSensorSPI encoder2 = MagneticSensorSPI(AS5048_SPI, PB12);
+MagneticSensorSPI encoder3 = MagneticSensorSPI(AS5048_SPI, PB11);
+
+BLDCDriver3PWM driver1 = BLDCDriver3PWM(PA8, PA9, PA10, PB1);
+BLDCDriver3PWM driver2 = BLDCDriver3PWM(PA4, PC7, PB0, PB5);
+BLDCDriver3PWM driver3 = BLDCDriver3PWM(PB2, PB4, PB9, PB10);
+
+BLDCMotor motor1 = BLDCMotor(11);
+BLDCMotor motor2 = BLDCMotor(11);
+BLDCMotor motor3 = BLDCMotor(11);
+
+const int ESTOP_PIN = PC3;
+
+float target_velocity1 = 0.0f;
+float target_velocity2 = 0.0f;
+float target_velocity3 = 0.0f;
+
+const float MAX_ERROR = 0.01f;
+
+const float MAX_VELOCITY = 5.0f;
+
+// functions
+
+void checkStop() {  
+  if (digitalRead(ESTOP_PIN) == HIGH) {  
+    triggerEmergencyStop();  
+  }  
+}  
+
+void triggerEmergencyStop() {  
+  Serial.println("EMERGENCY STOP: Halting all motor drivers.");  
+  while (true) {  
+    motor1.disable();  
+    motor2.disable();  
+    motor3.disable();  
+  }  
+}
+
+void setup() {
+  Serial.begin(115200);
+  delay(1000);
+
+  pinMode(ESTOP_PIN, INPUT_PULLUP);
+
+  encoder1.init(); encoder2.init(); encoder3.init();
+
+  driver1.voltage_power_supply = 8; driver2.voltage_power_supply = 8; driver3.voltage_power_supply = 8;
+  driver1.init(); driver2.init(); driver3.init();
+
+  motor1.linkDriver(&driver1);motor1.linkSensor(&encoder1);
+  motor2.linkDriver(&driver2); motor2.linkSensor(&encoder2);
+  motor3.linkDriver(&driver3); motor3.linkSensor(&encoder3);
+
+  motor1.controller = MotionControlType::velocity;
+  motor2.controller = MotionControlType::velocity;
+  motor3.controller = MotionControlType::velocity;
+
+  motor1.voltage_limit = 3; motor2.voltage_limit = 3; motor3.voltage_limit = 3;
+
+  motor1.velocity_limit = MAX_VELOCITY;motor2.velocity_limit = MAX_VELOCITY; motor3.velocity_limit = MAX_VELOCITY;
+
+  motor1.init(); motor2.init(); motor3.init();
+  motor1.initFOC(); motor2.initFOC(); motor3.initFOC();
+
+  // button setup/communication
+
+}
+
+void loop() {
+  checkStop();
+
+  motor1.loopFOC();
+  motor2.loopFOC();
+  motor3.loopFOC();
+
+  // input controls here
+
+  motor1.move(target_velocity1);
+  motor2.move(target_velocity2);
+  motor3.move(target_velocity3);
+
+  errorCheck();
+}
+
+void errorCheck() {  
+  float error1 = abs(target_velocity1 - encoder1.getVelocity());  
+  float error3 = abs(target_velocity3 - encoder3.getVelocity());  
+
+  if (error1 > MAX_ERROR) {  
+    Serial.println("SPEED EXCEEDED LIMIT -> TRIGGERED EMERGENCY STOP");  
+    triggerEmergencyStop();  
+  }  
+  if (error3 > MAX_ERROR) {  
+    Serial.println("SPEED EXCEEDED LIMIT -> TRIGGERED EMERGENCY STOP");  
+    triggerEmergencyStop();  
+  }  
+}  
