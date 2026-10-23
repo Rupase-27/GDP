@@ -5,10 +5,10 @@ MagneticEncoderSPI encoder1 = MagneticEncoderSPI(AS5048A_SPI, D10); // Motor 1 (
 MagneticEncoderSPI encoder2 = MagneticEncoderSPI(AS5048A_SPI, PB12);  // Motor 2 (Guidewire Rotation) 
 MagneticEncoderSPI encoder3 = MagneticEncoderSPI(AS5048A_SPI, PB11);  // Motor 3 (Catheter Translation) 
 
-// DRIVERS (3x 3-PWM Drivers)
-BLDCDriver3PWM driver1 =BLDCDriver3PWM(D7, D8, D2, PB1);  
-BLDCDriver3PWM driver2 = BLDCDriver3PWM(PC6, D9, PC9, D4);  
-BLDCDriver3PWM driver3 = BLDCDriver3PWM(PB2, PC2, PC8, PC5);  
+/ DRIVERS (3x 3-PWM Drivers)
+BLDCDriver3PWM driver1 =BLDCDriver3PWM(PA8, PA9, PA10, PB1);  
+BLDCDriver3PWM driver2 = BLDCDriver3PWM(PA4, PC7, PB0, PB5);  
+BLDCDriver3PWM driver3 = BLDCDriver3PWM(PB2, PB4, PB9, PB10); 
 
 // MOTORS (11 Pole Pairs - adjust if your hardware differs)
 BLDCMotor motor1 = BLDCMotor(11); 
