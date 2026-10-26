@@ -21,13 +21,13 @@
 
 #include <SimpleFOC.h>
 
-MagneticSensorSPI encoder1 = MagneticSensorSPI(AS5048_SPI, D10);
+MagneticSensorSPI encoder1 = MagneticSensorSPI(AS5048_SPI, PB6);
 MagneticSensorSPI encoder2 = MagneticSensorSPI(AS5048_SPI, PB12);
 MagneticSensorSPI encoder3 = MagneticSensorSPI(AS5048_SPI, PB11);
 
-BLDCDriver3PWM driver1 = BLDCDriver3PWM(PA8, PA9, PA10, PB1);
-BLDCDriver3PWM driver2 = BLDCDriver3PWM(PA4, PC7, PB0, PB5);
-BLDCDriver3PWM driver3 = BLDCDriver3PWM(PB2, PB4, PB9, PB10);
+BLDCDriver3PWM driver1 = BLDCDriver3PWM(PA10, PA9, PA8, PB1);
+BLDCDriver3PWM driver2 = BLDCDriver3PWM(PC6, PC7, PC9, PB5);
+BLDCDriver3PWM driver3 = BLDCDriver3PWM(PB2, PC2, PC8, PC5);
 
 BLDCMotor motor1 = BLDCMotor(11);
 BLDCMotor motor2 = BLDCMotor(11);
