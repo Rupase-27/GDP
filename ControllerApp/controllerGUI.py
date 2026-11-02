@@ -12,9 +12,12 @@ class ControlMode(Enum):
     
 from guidewirePanel import GuidewirePanel # Make this happen somewhere else later
 
+from datetime import datetime # Same here for logging
+
 # Used in left half of controller window
 class ControlPanel(QWidget):
     controlling = ControlMode.GUIDEWIRE
+    log_message = pyqtSignal(str) # Current message being sent to logs
 
     SPEED_PRESETS = {"0.005m/s": 5, "0.010m/s": 10, "0.019m/s": 19}
 
@@ -90,6 +93,9 @@ class ControlPanel(QWidget):
 
     def start(self, name):
         print(f"start button pressed: {name}")
+        log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s"
+        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        
         if self.controlling == ControlMode.GUIDEWIRE:
             #print("guidewire go")
             print("")
@@ -100,6 +106,9 @@ class ControlPanel(QWidget):
 
     def stop(self):
         print("stop button pressed")
+        log_msg = f"Stopping movement"
+        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        
         if self.controlling == ControlMode.GUIDEWIRE:
             #print("guidewire stop")
             print("")
@@ -147,6 +156,10 @@ class ControlPanel(QWidget):
     def set_speed(self, speed):
         self.speed = speed
         self.speed_label.setText(f"Speed: {(speed/1000):.3f}m/s / 0.020m/s")
+        
+        log_msg = f"Speed set to: {self.speed/1000:.3f}m/s"
+        self.log_message.emit(log_msg) # Etc and stuff yeah
+        
         # Press the button if speed matches preset option
         btn = self.presets.button(speed)
         if btn:
@@ -192,6 +205,7 @@ class MainWindow(QMainWindow):
         log_lay = QVBoxLayout(self.logs)
         self.log = QTextEdit(readOnly=True)
         log_lay.addWidget(self.log)
+        self.controls.log_message.connect(self.add_log)
         
         self.guidewire_state = GuidewirePanel() # This will also be somewhere else later
 
@@ -202,6 +216,13 @@ class MainWindow(QMainWindow):
         
         root.addLayout(left, 1)
         root.addLayout(right, 1)
+        
+        
+    def add_log(self, message: str):
+        # stamp = datetime.now().strftime("%H:%M:%S")
+        # self.log.append(f"[{stamp}] {message}") # With timestamp if wanted
+        self.log.append(message)
+        self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
 # import plotly.graph_objects as go
 
