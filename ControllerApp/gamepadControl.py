@@ -3,6 +3,8 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 
 import pygame
 from PyQt5.QtCore import QObject, pyqtSignal, QTimer
+import sys
+from PyQt5.QtWidgets import QApplication
 
 class GamepadControl(QObject):
     # drive = pyqtSignal(str, float)
@@ -48,3 +50,9 @@ class GamepadControl(QObject):
             print("Rotate clockwise if positive, counterclockwise if negative " + str(lx))
         elif abs(ry) > 0.1:
             print("Speed increase if positive, decrease if negative " + str(ry))
+        
+            
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    gamepad_control = GamepadControl()
+    sys.exit(app.exec_())
