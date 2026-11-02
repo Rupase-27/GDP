@@ -9,6 +9,8 @@ from enum import Enum
 class ControlMode(Enum):
     GUIDEWIRE = "guidewire"
     CATHETER = "catheter"
+    
+from guidewirePanel import GuidewirePanel # Make this happen somewhere else later
 
 # Used in left half of controller window
 class ControlPanel(QWidget):
@@ -33,7 +35,7 @@ class ControlPanel(QWidget):
         box = QGroupBox("Control Mode")
         layout = QVBoxLayout(box)
 
-        self.toggle_button = QPushButton("Guidewire")
+        self.toggle_button = QPushButton("Controlling: Guidewire")
         self.toggle_button.setCheckable(True)
         self.toggle_button.setMinimumSize(110, 70)
         self.toggle_button.clicked.connect(self.toggle)
@@ -44,13 +46,13 @@ class ControlPanel(QWidget):
     # Sets control mode and disables/enables rotation buttons
     def toggle(self):
         if self.toggle_button.isChecked():
-            self.toggle_button.setText("Catheter")
+            self.toggle_button.setText("Controlling: Catheter")
             self.controlling = ControlMode.CATHETER
 
             self.findChild(QPushButton, "anti-cw").setEnabled(False)
             self.findChild(QPushButton, "cw").setEnabled(False)
         else:
-            self.toggle_button.setText("Guidewire")
+            self.toggle_button.setText("Controlling: Guidewire")
             self.controlling = ControlMode.GUIDEWIRE
 
             self.findChild(QPushButton, "anti-cw").setEnabled(True)
@@ -171,15 +173,16 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Controller")
-        self.resize(1100, 700)
+        self.resize(1650, 1050)
 
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
 
         # Left half
+        left = QVBoxLayout()
         self.controls = ControlPanel()
-        root.addWidget(self.controls, 1)
+        left.addWidget(self.controls, 1)
 
         # Right half panels
         right = QVBoxLayout()
@@ -189,12 +192,22 @@ class MainWindow(QMainWindow):
         log_lay = QVBoxLayout(self.logs)
         self.log = QTextEdit(readOnly=True)
         log_lay.addWidget(self.log)
+        
+        self.guidewire_state = GuidewirePanel() # This will also be somewhere else later
 
         right.addWidget(self.camera_panel, 2)
-        right.addWidget(self.guidewire_state, 1)
-        right.addWidget(self.logs, 1)
+        right.addWidget(self.guidewire_state, 3)
+        # right.addWidget(self.logs, 1)
+        left.addWidget(self.logs, 1)
+        
+        root.addLayout(left, 1)
         root.addLayout(right, 1)
 
+# import plotly.graph_objects as go
+
+# fig = go.Figure(data=go.Streamtube(x=[0, 0, 0], y=[0, 1, 2], z=[0, 0, 0],
+#                                    u=[0, 0, 0], v=[1, 1, 1], w=[0, 0, 0]))
+# fig.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
