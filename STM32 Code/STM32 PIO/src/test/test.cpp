@@ -6,9 +6,9 @@
 #define PWM1_C PA8
 #define DRIVER1_EN PB10
 
-#define PWM2_A PC6
-#define PWM2_B PC7
-#define PWM2_C PC9
+#define PWM2_A PC6_ALT1
+#define PWM2_B PC7_ALT1
+#define PWM2_C PC9_ALT1
 #define DRIVER2_EN PB5
 
 #define PWM3_A PB2
@@ -29,7 +29,7 @@
 #define PWM3_C_CHANNEL 3
 
 #define ESTOP_PIN PC3
-#define MODE_SWITCH PC14
+#define MODE_SWITCH PC4
 #define BTN_FORWARD PC10
 #define BTN_BACK PC11
 #define BTN_CW PC12
@@ -55,9 +55,9 @@ float current_velocity1 = 0.0f;
 float current_velocity2 = 0.0f;
 float current_velocity3 = 0.0f;
 
-const float CONTROL_SPEED = 0.05f;
+const float CONTROL_SPEED = 1.0f;
 const float MAX_VELOCITY = 5.0f;
-const float acceleration = 0.2f;
+const float acceleration = 50.0f;
 
 float amplitude = 1.0f;
 float supply_voltage = 12.0f;
@@ -428,6 +428,19 @@ Serial.println("Timer 3 ready");
 
 void loop()
 {
+    static uint32_t lastPrint = 0;
+
+    if (millis() - lastPrint >= 200)
+    {
+        lastPrint = millis();
+
+        Serial.print("Target 1: ");
+        Serial.print(target_velocity1, 3);
+        Serial.print("  Target 2: ");
+        Serial.print(target_velocity2, 3);
+        Serial.print("  Target 3: ");
+        Serial.println(target_velocity3, 3);
+    }
     checkStop();
     updateMode();
     readControls();
