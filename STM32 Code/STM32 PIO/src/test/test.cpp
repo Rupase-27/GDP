@@ -55,7 +55,7 @@ float current_velocity1 = 0.0f;
 float current_velocity2 = 0.0f;
 float current_velocity3 = 0.0f;
 
-const float CONTROL_SPEED = 1.0f;
+float CONTROL_SPEED = 1.0f;
 const float MAX_VELOCITY = 5.0f;
 const float acceleration = 50.0f;
 
@@ -327,6 +327,32 @@ float updateElectricalAngle(
     return electrical_angle;
 }
 
+void readSerialSpeed()
+{
+    if (Serial.available() > 0)
+    {
+        float newSpeed = Serial.parseFloat();
+
+        while (Serial.available() > 0)
+        {
+            Serial.read();
+        }
+
+        if (newSpeed >= 0.0f && newSpeed <= MAX_VELOCITY)
+        {
+            CONTROL_SPEED = newSpeed;
+
+            Serial.print("All motor speeds set to: ");
+            Serial.println(CONTROL_SPEED, 3);
+        }
+        else
+        {
+            Serial.print("Invalid speed. Enter 0 to ");
+            Serial.println(MAX_VELOCITY, 1);
+        }
+    }
+}
+
 void setup()
 {
     Serial.begin(115200);
@@ -428,19 +454,10 @@ Serial.println("Timer 3 ready");
 
 void loop()
 {
+    readSerialSpeed();
+
     static uint32_t lastPrint = 0;
 
-    if (millis() - lastPrint >= 200)
-    {
-        lastPrint = millis();
-
-        Serial.print("Target 1: ");
-        Serial.print(target_velocity1, 3);
-        Serial.print("  Target 2: ");
-        Serial.print(target_velocity2, 3);
-        Serial.print("  Target 3: ");
-        Serial.println(target_velocity3, 3);
-    }
     checkStop();
     updateMode();
     readControls();
@@ -526,7 +543,7 @@ void loop()
         electrical_angle3
     );
 
-    if (millis() - previous_print > 1000)
+    if (millis() - previous_print > 10000)
     {
         previous_print = millis();
 
