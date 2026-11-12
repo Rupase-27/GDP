@@ -9,10 +9,15 @@ from enum import Enum
 class ControlMode(Enum):
     GUIDEWIRE = "guidewire"
     CATHETER = "catheter"
+    
+from guidewirePanel import GuidewirePanel # Make this happen somewhere else later
+
+from datetime import datetime # Same here for logging
 
 # Used in left half of controller window
 class ControlPanel(QWidget):
     controlling = ControlMode.GUIDEWIRE
+    log_message = pyqtSignal(str) # Current message being sent to logs
 
     SPEED_PRESETS = {"0.005m/s": 5, "0.010m/s": 10, "0.019m/s": 19}
 
@@ -33,7 +38,7 @@ class ControlPanel(QWidget):
         box = QGroupBox("Control Mode")
         layout = QVBoxLayout(box)
 
-        self.toggle_button = QPushButton("Guidewire")
+        self.toggle_button = QPushButton("Controlling: Guidewire")
         self.toggle_button.setCheckable(True)
         self.toggle_button.setMinimumSize(110, 70)
         self.toggle_button.clicked.connect(self.toggle)
@@ -44,13 +49,13 @@ class ControlPanel(QWidget):
     # Sets control mode and disables/enables rotation buttons
     def toggle(self):
         if self.toggle_button.isChecked():
-            self.toggle_button.setText("Catheter")
+            self.toggle_button.setText("Controlling: Catheter")
             self.controlling = ControlMode.CATHETER
 
             self.findChild(QPushButton, "anti-cw").setEnabled(False)
             self.findChild(QPushButton, "cw").setEnabled(False)
         else:
-            self.toggle_button.setText("Guidewire")
+            self.toggle_button.setText("Controlling: Guidewire")
             self.controlling = ControlMode.GUIDEWIRE
 
             self.findChild(QPushButton, "anti-cw").setEnabled(True)
@@ -88,6 +93,9 @@ class ControlPanel(QWidget):
 
     def start(self, name):
         print(f"start button pressed: {name}")
+        log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s"
+        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        
         if self.controlling == ControlMode.GUIDEWIRE:
             #print("guidewire go")
             print("")
@@ -98,6 +106,9 @@ class ControlPanel(QWidget):
 
     def stop(self):
         print("stop button pressed")
+        log_msg = f"Stopping movement"
+        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        
         if self.controlling == ControlMode.GUIDEWIRE:
             #print("guidewire stop")
             print("")
@@ -145,6 +156,10 @@ class ControlPanel(QWidget):
     def set_speed(self, speed):
         self.speed = speed
         self.speed_label.setText(f"Speed: {(speed/1000):.3f}m/s / 0.020m/s")
+        
+        log_msg = f"Speed set to: {self.speed/1000:.3f}m/s"
+        self.log_message.emit(log_msg) # Etc and stuff yeah
+        
         # Press the button if speed matches preset option
         btn = self.presets.button(speed)
         if btn:
@@ -171,15 +186,16 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Controller")
-        self.resize(1100, 700)
+        self.resize(1650, 1050)
 
         central = QWidget()
         self.setCentralWidget(central)
         root = QHBoxLayout(central)
 
         # Left half
+        left = QVBoxLayout()
         self.controls = ControlPanel()
-        root.addWidget(self.controls, 1)
+        left.addWidget(self.controls, 1)
 
         # Right half panels
         right = QVBoxLayout()
@@ -189,12 +205,30 @@ class MainWindow(QMainWindow):
         log_lay = QVBoxLayout(self.logs)
         self.log = QTextEdit(readOnly=True)
         log_lay.addWidget(self.log)
+        self.controls.log_message.connect(self.add_log)
+        
+        self.guidewire_state = GuidewirePanel() # This will also be somewhere else later
 
         right.addWidget(self.camera_panel, 2)
-        right.addWidget(self.guidewire_state, 1)
-        right.addWidget(self.logs, 1)
+        right.addWidget(self.guidewire_state, 3)
+        # right.addWidget(self.logs, 1)
+        left.addWidget(self.logs, 1)
+        
+        root.addLayout(left, 1)
         root.addLayout(right, 1)
+        
+        
+    def add_log(self, message: str):
+        # stamp = datetime.now().strftime("%H:%M:%S")
+        # self.log.append(f"[{stamp}] {message}") # With timestamp if wanted
+        self.log.append(message)
+        self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
+# import plotly.graph_objects as go
+
+# fig = go.Figure(data=go.Streamtube(x=[0, 0, 0], y=[0, 1, 2], z=[0, 0, 0],
+#                                    u=[0, 0, 0], v=[1, 1, 1], w=[0, 0, 0]))
+# fig.show()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
