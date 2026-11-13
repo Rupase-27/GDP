@@ -1,6 +1,22 @@
+//
+//
+//
+//
+//  start() - enables motor drivers when start button on controller is pressed
+//
+//  setPhaseVoltages() - set duty cycle of ABC and sets the Capture Compare Registers CCR 
+//                       in STM32 hardware timer library to trigger when reached duty value
+//
+//  initialiseMotors() - 
+//
+//  
+
+
+
 #include <Arduino.h>
 #include <HardwareTimer.h>
 
+// Pin connoections to board
 #define PWM1_A PA10
 #define PWM1_B PA9
 #define PWM1_C PA8
@@ -16,6 +32,7 @@
 #define PWM3_C PC8_ALT2
 #define DRIVER3_EN PC5
 
+// Timer channel connections
 #define PWM1_A_CHANNEL 3
 #define PWM1_B_CHANNEL 2
 #define PWM1_C_CHANNEL 1
@@ -32,23 +49,24 @@
 #define MODE_SWITCH PC4
 #define START PB1
 
-#define UP_SPEED PB11
-#define DOWN_SPEED PB12
+#define UP_SPEED PB12
+#define DOWN_SPEED PB11
 
 #define BTN_FORWARD PC10
 #define BTN_BACK PC11
 #define BTN_CW PC12
 #define BTN_CCW PD2
 
-
 #define PWM_FREQUENCY 25000
 
+// Advanced Motor control timers on NUCELO-G491RE
 HardwareTimer pwmTimer1(TIM1);
 HardwareTimer pwmTimer2(TIM8);
 HardwareTimer pwmTimer3(TIM20);
 
 const int pole_pairs = 11;
 
+// Initialisation 
 float electrical_angle1 = 0.0f;
 float electrical_angle2 = 0.0f;
 float electrical_angle3 = 0.0f;
@@ -348,30 +366,44 @@ float updateElectricalAngle(
     return electrical_angle;
 }
 
-void readSerialSpeed()
+void readSpeedButtons()
 {
-    if (Serial.available() > 0)
+    const float SPEED_INCREMENT = 0.2f;
+
+    static bool previousUpState = HIGH;
+    static bool previousDownState = HIGH;
+
+    bool upState = digitalRead(UP_SPEED);
+    bool downState = digitalRead(DOWN_SPEED);
+
+    if (upState == LOW && previousUpState == HIGH)
     {
-        float newSpeed = Serial.parseFloat();
+        CONTROL_SPEED += SPEED_INCREMENT;
 
-        while (Serial.available() > 0)
+        if (CONTROL_SPEED > MAX_VELOCITY)
         {
-            Serial.read();
+            CONTROL_SPEED = MAX_VELOCITY;
         }
 
-        if (newSpeed >= 0.0f && newSpeed <= MAX_VELOCITY)
-        {
-            CONTROL_SPEED = newSpeed;
-
-            Serial.print("All motor speeds set to: ");
-            Serial.println(CONTROL_SPEED, 3);
-        }
-        else
-        {
-            Serial.print("Invalid speed. Enter 0 to ");
-            Serial.println(MAX_VELOCITY, 1);
-        }
+        Serial.print("Speed increased to: ");
+        Serial.println(CONTROL_SPEED, 2);
     }
+
+    if (downState == LOW && previousDownState == HIGH)
+    {
+        CONTROL_SPEED -= SPEED_INCREMENT;
+
+        if (CONTROL_SPEED < 0.0f)
+        {
+            CONTROL_SPEED = 0.0f;
+        }
+
+        Serial.print("Speed decreased to: ");
+        Serial.println(CONTROL_SPEED, 2);
+    }
+
+    previousUpState = upState;
+    previousDownState = downState;
 }
 
 void setup()
@@ -394,6 +426,8 @@ void setup()
     pinMode(BTN_CW, INPUT_PULLUP);
     pinMode(BTN_CCW, INPUT_PULLUP);
     pinMode(START, INPUT_PULLUP);
+    pinMode(UP_SPEED, INPUT_PULLUP);
+    pinMode(DOWN_SPEED, INPUT_PULLUP);
 
     Serial.println("Starting Timer 1");
 
@@ -473,7 +507,7 @@ Serial.println("Timer 3 ready");
 void loop()
 {
     start();
-    readSerialSpeed();
+    readSpeedButtons();
 
     static uint32_t lastPrint = 0;
 
