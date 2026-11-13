@@ -30,10 +30,16 @@
 
 #define ESTOP_PIN PC3
 #define MODE_SWITCH PC4
+#define START PB1
+
+#define UP_SPEED PB11
+#define DOWN_SPEED PB12
+
 #define BTN_FORWARD PC10
 #define BTN_BACK PC11
 #define BTN_CW PC12
 #define BTN_CCW PD2
+
 
 #define PWM_FREQUENCY 25000
 
@@ -63,6 +69,7 @@ float amplitude = 1.0f;
 float supply_voltage = 12.0f;
 
 bool guidewireMode = true;
+bool motorsEnabled = false;
 
 uint32_t timer_period1;
 uint32_t timer_period2;
@@ -70,6 +77,20 @@ uint32_t timer_period3;
 
 uint32_t previous_time;
 uint32_t previous_print;
+
+void start()
+{
+    if (!motorsEnabled && digitalRead(START) == LOW)
+    {
+        digitalWrite(DRIVER1_EN, HIGH);
+        digitalWrite(DRIVER2_EN, HIGH);
+        digitalWrite(DRIVER3_EN, HIGH);
+
+        motorsEnabled = true;
+
+        Serial.println("Motors enabled");
+    }
+}
 
 void setPhaseVoltages(
     HardwareTimer &timer,
@@ -190,12 +211,12 @@ void disableAllMotors()
 void triggerEmergencyStop()
 {
     disableAllMotors();
+    motorsEnabled = false;
 
     Serial.println("EMERGENCY STOP");
 
-    while (true)
-    {
-    }
+    start();
+
 }
 
 void checkStop()
@@ -372,6 +393,7 @@ void setup()
     pinMode(BTN_BACK, INPUT_PULLUP);
     pinMode(BTN_CW, INPUT_PULLUP);
     pinMode(BTN_CCW, INPUT_PULLUP);
+    pinMode(START, INPUT_PULLUP);
 
     Serial.println("Starting Timer 1");
 
@@ -443,10 +465,6 @@ Serial.println("Timer 3 ready");
 
     delay(100);
 
-    digitalWrite(DRIVER1_EN, HIGH);
-    digitalWrite(DRIVER2_EN, HIGH);
-    digitalWrite(DRIVER3_EN, HIGH);
-
     previous_time = micros();
 
     Serial.println("System Ready");
@@ -454,6 +472,7 @@ Serial.println("Timer 3 ready");
 
 void loop()
 {
+    start();
     readSerialSpeed();
 
     static uint32_t lastPrint = 0;
