@@ -1,17 +1,3 @@
-//
-//
-//
-//
-//  start() - enables motor drivers when start button on controller is pressed
-//
-//  setPhaseVoltages() - set duty cycle of ABC and sets the Capture Compare Registers CCR 
-//                       in STM32 hardware timer library to trigger when reached duty value
-//
-//  initialiseMotors() - 
-//
-//  
-
-
 
 #include <Arduino.h>
 #include <HardwareTimer.h>
