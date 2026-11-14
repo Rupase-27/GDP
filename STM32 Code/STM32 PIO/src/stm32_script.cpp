@@ -68,7 +68,7 @@
 #include <Arduino.h>
 #include <HardwareTimer.h>
 
-// Pin connoections to board
+// Pin connections to board
 #define PWM1_A PA10
 #define PWM1_B PA9
 #define PWM1_C PA8
