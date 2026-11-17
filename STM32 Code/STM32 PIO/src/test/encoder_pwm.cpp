@@ -43,6 +43,8 @@ void setup() {
     sensor.enableInterrupt(doPWM);
     motor.linkSensor(&sensor);
 
+    motor.voltage_limit = 2.0f;
+    motor.controller = MotionControlType::velocity_openloop;
     motor.init();
     motor.initFOC();
 
