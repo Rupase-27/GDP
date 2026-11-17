@@ -9,7 +9,6 @@
 #define PWM_C      PA8     // D7
 #define DRIVER_EN  PB1
 
-
 MagneticSensorSPI encoder(
     AS5048_SPI,
     ENCODER_CS
@@ -37,33 +36,33 @@ void setup() {
     SimpleFOCDebug::enable(&Serial);
 
     command.add('T', onTarget, "target velocity");
-  // initialize magnetic sensor hardware
-  encoder.init();
-  // link the motor to the sensor
-  motor.linkSensor(&encoder);
+    // initialize magnetic sensor hardware
+    encoder.init();
+    // link the motor to the sensor
+    motor.linkSensor(&encoder);
 
-  // driver config
-  driver.voltage_power_supply = 12; // V
-  driver.init();
-  motor.linkDriver(&driver);
+    // driver config
+    driver.voltage_power_supply = 12; // V
+    driver.init();
+    motor.linkDriver(&driver);
 
-  motor.controller = MotionControlType::velocity;
-  motor.torque_controller = TorqueControlType::voltage; 
+    motor.controller = MotionControlType::velocity;
+    motor.torque_controller = TorqueControlType::voltage; 
 
-  motor.updateVoltageLimit(3.0);
+    motor.updateVoltageLimit(3.0);
 
-  motor.PID_velocity.P = 0.2;
-  motor.PID_velocity.I = 20;
-  motor.PID_velocity.D = 0;
-  
-  motor.PID_velocity.output_ramp = 1000.0f;
-  motor.LPF_velocity.Tf = 0.02;
+    motor.PID_velocity.P = 0.2;
+    motor.PID_velocity.I = 20;
+    motor.PID_velocity.D = 0;
+    
+    motor.PID_velocity.output_ramp = 1000.0f;
+    motor.LPF_velocity.Tf = 0.02;
 
-  motor.voltage_sensor_align = 3.0f;
+    motor.voltage_sensor_align = 3.0f;
 
-  motor.init();
+    motor.init();
 
-  Serial.println("Rotate motor by hand now...");
+    Serial.println("Rotate motor by hand now...");
 
 for (int i = 0; i < 100; i++)
 {
@@ -77,16 +76,17 @@ for (int i = 0; i < 100; i++)
 
     delay(100);
 }
-  motor.initFOC();
 
-  Serial.println("Motor ready.");
-  _delay(1000);
+    motor.initFOC();
+
+    Serial.println("Motor ready.");
+    _delay(1000);
 }
 
 void loop() {
-  motor.loopFOC();
+    motor.loopFOC();
 
-  motor.move(target_velocity);
+    motor.move(target_velocity);
 
-  command.run();
+    command.run();
 }
