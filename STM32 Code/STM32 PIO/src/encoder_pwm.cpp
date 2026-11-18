@@ -1,3 +1,59 @@
+//
+//  OVERVIEW:
+//  This code is designed to control 3 GM3506 motors using a STM32G491RE Nucleo board. 
+//  The motors are controlled using open-loop velocity control in SimpleFOC library
+//
+//  The code allows for two modes of operation: guidewire and catheter mode, which can be 
+//  toggled using a switch. The motors can be enabled or disabled using a start button, 
+//  and an emergency stop button is provided for safety. The speed of the motors can be 
+//  adjusted using up and down buttons.
+//
+//  doPWM1(), doPWM2(), doPWM3()
+//  - Interrupt service routines for handling PWM signals from the encoders
+//
+//  start() 
+//  - Enables the motors when the start button is pressed
+//  - Inputs: None
+//  - Updates: motorsEnabled
+//
+//  triggerEmergencyStop() 
+//  - Disables all motors and prints "EMERGENCY STOP"
+//  - Inputs: None
+//  - Updates: motorsEnabled
+//
+//  checkStop() 
+//  - Checks if the emergency stop button is pressed and triggers emergency stop
+//  - Inputs: None
+//
+//  updateMode() 
+//  - Reads the mode toggleswitch and updates the guidewireMode variable
+//  - Inputs: None
+//  - Updates: guidewireMode
+//
+//  readControls()
+//  - Reads the state of control buttons and updates target velocities for each motor
+//  - Rotation disabled for catheter mode
+//  - Velocity set to 0 when fwd/back or cw/ccw buttons are pressed together
+//  - Inputs: None
+//  - Updates: Target velocities
+//
+//  readSpeedButtons()
+//  - Reads the state of speed control buttons and updates CONTROL_SPEED
+//  - Includes debounce logic with edge detection and time constraints to prevent multiple 
+//    increments/decrements from a single press
+//  - Inputs: None
+//  - Updates: CONTROL_SPEED
+//
+//  currentAngleUpdate()
+//  - Updates the global angle variable of working motor based on encoder readings
+//  - Can be used in UI to show angle or later diatnce moved
+//  - Inputs: None
+//  - Updates: current_moving_angle
+//
+////////////////////////////////////////////////////////////////////////////////
+
+
+
 #include <Arduino.h>
 #include <SimpleFOC.h>
 
@@ -42,6 +98,16 @@ const unsigned long DEBOUNCE_TIME = 50;
 float target_velocity1 = 0.0f;
 float target_velocity2 = 0.0f;
 float target_velocity3 = 0.0f;
+
+float current_angle1 = 0.0f;
+float current_angle2 = 0.0f;
+float current_angle3 = 0.0f;
+
+float previous_angle1 = 0.0f;
+float previous_angle2 = 0.0f;
+float previous_angle3 = 0.0f;
+
+float current_moving_angle = 0.0f;
 
 bool guidewireMode = true;
 bool motorsEnabled = false;
@@ -199,37 +265,64 @@ void readControls()
 
     if (guidewireMode)
     {
-        if (!digitalRead(BTN_FORWARD))
+        if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK))
+        {
+            target_velocity1 = 0.0f;
+        }
+        else if (!digitalRead(BTN_FORWARD))
         {
             target_velocity1 = CONTROL_VELOCITY;
         }
-
-        if (!digitalRead(BTN_BACK))
+        else if (!digitalRead(BTN_BACK))
         {
             target_velocity1 = -CONTROL_VELOCITY;
         }
 
-        if (!digitalRead(BTN_CW))
+        if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW))
+        {
+            target_velocity2 = 0.0f;
+        }
+        else if (!digitalRead(BTN_CW))
         {
             target_velocity2 = CONTROL_VELOCITY;
         }
-
-        if (!digitalRead(BTN_CCW))
+        else if (!digitalRead(BTN_CCW))
         {
             target_velocity2 = -CONTROL_VELOCITY;
         }
     }
     else
     {
-        if (!digitalRead(BTN_FORWARD))
+        if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK))
+        {
+            target_velocity3 = 0.0f;
+        }
+        else if (!digitalRead(BTN_FORWARD))
         {
             target_velocity3 = CONTROL_VELOCITY;
         }
-
-        if (!digitalRead(BTN_BACK))
+        else if (!digitalRead(BTN_BACK))
         {
             target_velocity3 = -CONTROL_VELOCITY;
         }
+    }
+}
+
+void currentAngleUpdate() {
+    current_angle1 = sensor1.getAngle();
+    current_angle2 = sensor2.getAngle();
+    current_angle3 = sensor3.getAngle();
+
+    // may need to change to small interval depending on accuracy
+
+    if (target_velocity1 != 0) {
+        current_moving_angle = current_angle1;
+    }
+    else if (target_velocity2 != 0) {
+        current_moving_angle = current_angle2;
+    }
+    else if (target_velocity3 != 0) {
+        current_moving_angle = current_angle3;
     }
 }
 
@@ -299,6 +392,10 @@ void setup() {
     driver2.disable();
     driver3.disable();
 
+    previous_angle1 = sensor1.getAngle();
+    previous_angle2 = sensor2.getAngle();
+    previous_angle3 = sensor3.getAngle();
+
     motorsEnabled = false;
 
     Serial.println("Motors disabled - press START");
@@ -306,15 +403,12 @@ void setup() {
 }
 
 void loop() {
-    sensor1.update();
-    sensor2.update();
-    sensor3.update();
-
     start();
     readSpeedButtons();
     checkStop();
     updateMode();
     readControls();
+    currentAngleUpdate();
 
     motor1.loopFOC();
     motor2.loopFOC();
@@ -330,25 +424,7 @@ void loop() {
         Serial.print("Mode: ");
         Serial.print(guidewireMode ? "Guidewire" : "Catheter");
 
-        Serial.print(" | Set speed: ");
-        Serial.print(CONTROL_VELOCITY, 2);
-
-        Serial.print(" | T1: ");
-        Serial.print(-target_velocity1, 2);
-
-        Serial.print(" T2: ");
-        Serial.print(-target_velocity2, 2);
-
-        Serial.print(" T3: ");
-        Serial.print(target_velocity3, 2);
-
-        Serial.print(" | A1: ");
-        Serial.print(sensor1.getAngle(), 4);
-
-        Serial.print(" A2: ");
-        Serial.print(sensor2.getAngle(), 4);
-
-        Serial.print(" A3: ");
-        Serial.println(sensor3.getAngle(), 4);
+        Serial.print("Angle of Moving motor: ");
+        Serial.print(current_moving_angle, 4);
     }
 }
