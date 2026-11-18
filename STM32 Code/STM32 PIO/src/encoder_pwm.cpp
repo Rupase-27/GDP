@@ -195,7 +195,8 @@ void updateMode()
         digitalRead(MODE_SWITCH);
 }
 
-void readSpeedButtons() {
+void readSpeedButtons() 
+{
     const float SPEED_INCREMENT = 0.2f;
 
     static bool lastUpReading = HIGH;
@@ -314,15 +315,23 @@ void currentAngleUpdate() {
     current_angle3 = sensor3.getAngle();
 
     // may need to change to small interval depending on accuracy
+    // may need to change sign based on motor movements in assembly
 
     if (target_velocity1 != 0) {
-        current_moving_angle = current_angle1;
+        current_moving_angle = current_angle1 * 180 / PI;
     }
     else if (target_velocity2 != 0) {
-        current_moving_angle = current_angle2;
+        current_moving_angle = current_angle2 * 180 / PI;
     }
     else if (target_velocity3 != 0) {
-        current_moving_angle = current_angle3;
+        current_moving_angle = current_angle3 * 180 / PI;
+    }
+
+    if (current_moving_angle > 360.0f) {
+        current_moving_angle -= 360.0f;
+    }
+    else if (current_moving_angle < 0.0f) {
+        current_moving_angle += 360.0f;
     }
 }
 
@@ -426,5 +435,6 @@ void loop() {
 
         Serial.print("Angle of Moving motor: ");
         Serial.print(current_moving_angle, 4);
+        Serial.print(" deg, ");
     }
 }
