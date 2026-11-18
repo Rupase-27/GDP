@@ -219,12 +219,8 @@ class MainWindow(QMainWindow):
         self.log.append(message)
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
 
-# import plotly.graph_objects as go
-
-# fig = go.Figure(data=go.Streamtube(x=[0, 0, 0], y=[0, 1, 2], z=[0, 0, 0],
-#                                    u=[0, 0, 0], v=[1, 1, 1], w=[0, 0, 0]))
-# fig.show()
-
+# Now for just running on its own for testing
+# Do not care if it's removed, shouldn't impact anything
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     stylePath = Path(__file__).parent / "style.qss"
