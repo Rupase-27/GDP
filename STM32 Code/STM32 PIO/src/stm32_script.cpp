@@ -97,19 +97,19 @@
 #define PWM3_B_CHANNEL 2
 #define PWM3_C_CHANNEL 3
 
-#define ESTOP PC3
-#define MODE_SWITCH PC4
-#define START PB1
+#define ESTOP PC4
+#define MODE_SWITCH PB13
+#define START PB14
 
 // Speed control buttons
-#define UP_SPEED PB12
-#define DOWN_SPEED PB11
+#define UP_SPEED PB15
+#define DOWN_SPEED PB1
 
 // Direction control buttons
-#define BTN_FORWARD PC10
-#define BTN_BACK PC11
-#define BTN_CW PC12
-#define BTN_CCW PD2
+#define BTN_FORWARD PA12
+#define BTN_BACK PA11
+#define BTN_CW PB12
+#define BTN_CCW PB11
 
 #define PWM_FREQUENCY 25000
 
@@ -426,50 +426,96 @@ void readSpeedButtons()
 {
     const float SPEED_INCREMENT = 0.2f;
 
-    // Static so doesn't reset every loop iteration, allowing for debounce timing
-    static unsigned long lastUpPress = 0;
-    static unsigned long lastDownPress = 0;
+    // Edge detection booleans
+    static bool lastUpReading = HIGH;
+    static bool lastDownReading = HIGH;
 
-    static bool previousUpState = HIGH;
-    static bool previousDownState = HIGH;
+    // Looking out for this stable state 
+    static bool stableUpState = HIGH;
+    static bool stableDownState = HIGH;
 
-    bool upState = digitalRead(UP_SPEED);
-    bool downState = digitalRead(DOWN_SPEED);
+    // Ensuring that a button press is only registered once per press 
+    static bool upPressRegistered = false;
+    static bool downPressRegistered = false;
 
-    if (upState == LOW && previousUpState == HIGH)
+    // Timer
+    static unsigned long upChangeTime = 0;
+    static unsigned long downChangeTime = 0;
+
+    unsigned long currentTime = millis();
+
+    bool upRead = digitalRead(UP_SPEED);
+    bool downRead = digitalRead(DOWN_SPEED);
+
+    if (upRead != lastUpReading)
     {
-        if (millis() - lastUpPress >= DEBOUNCE_TIME)
-        {
-            CONTROL_SPEED += SPEED_INCREMENT;
+        upChangeTime = currentTime;
+        lastUpReading = upRead;
+    }
 
-            if (CONTROL_SPEED > MAX_VELOCITY)
+    if ((currentTime - upChangeTime) >= DEBOUNCE_TIME)
+    {
+        if (upRead != stableUpState)
+        {
+            stableUpState = upRead;
+
+            // Might remove as can cause more delay in response time
+            if (stableUpState == LOW && !upPressRegistered)
             {
-                CONTROL_SPEED = MAX_VELOCITY;
+                upPressRegistered = true;
+
+                CONTROL_SPEED += SPEED_INCREMENT;
+
+                if (CONTROL_SPEED > MAX_VELOCITY)
+                {
+                    CONTROL_SPEED = MAX_VELOCITY;
+                }
+
+                Serial.print("Speed increased to: ");
+                Serial.println(CONTROL_SPEED, 2);
             }
 
-            lastUpPress = millis();
+            if (stableUpState == HIGH)
+            {
+                upPressRegistered = false;
+            }
         }
     }
 
-    if (downState == LOW && previousDownState == HIGH)
+    if (downRead != lastDownReading)
     {
-        if (millis() - lastDownPress >= DEBOUNCE_TIME)
-        {
-            CONTROL_SPEED -= SPEED_INCREMENT;
-
-            if (CONTROL_SPEED < 0.0f)
-            {
-                CONTROL_SPEED = 0.0f;
-            }
-
-            lastUpPress = millis();
-        }
+        downChangeTime = currentTime;
+        lastDownReading = downRead;
     }
 
-    previousUpState = upState;
-    previousDownState = downState;
+    if ((currentTime - downChangeTime) >= DEBOUNCE_TIME)
+    {
+        if (downRead != stableDownState)
+        {
+            stableDownState = downRead;
+
+            if (stableDownState == LOW && !downPressRegistered)
+            {
+                downPressRegistered = true;
+
+                CONTROL_SPEED -= SPEED_INCREMENT;
+
+                if (CONTROL_SPEED < 0.0f)
+                {
+                    CONTROL_SPEED = 0.0f;
+                }
+
+                Serial.print("Speed decreased to: ");
+                Serial.println(CONTROL_SPEED, 2);
+            }
+
+            if (stableDownState == HIGH)
+            {
+                downPressRegistered = false;
+            }
+        }
+    }
 }
-
 void setup()
 {
     Serial.begin(115200);
@@ -563,9 +609,6 @@ void loop()
 {
     start();
     readSpeedButtons();
-
-    static uint32_t lastPrint = 0;
-
     checkStop();
     updateMode();
     readControls();
