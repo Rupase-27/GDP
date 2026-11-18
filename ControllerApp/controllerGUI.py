@@ -16,6 +16,10 @@ from datetime import datetime # Same here for logging
 
 # Used in left half of controller window
 class ControlPanel(QWidget):
+    driveCommand = pyqtSignal(str)
+    stopCommand = pyqtSignal()
+    modeChanged = pyqtSignal(object)
+    
     controlling = ControlMode.GUIDEWIRE
     log_message = pyqtSignal(str) # Current message being sent to logs
 
@@ -60,6 +64,7 @@ class ControlPanel(QWidget):
 
             self.findChild(QPushButton, "anti-cw").setEnabled(True)
             self.findChild(QPushButton, "cw").setEnabled(True)
+        self.modeChanged.emit(self.controlling)
 
     # Defines the control panel with buttons to control push pull and rotation
     def controlPanel(self):
@@ -96,26 +101,16 @@ class ControlPanel(QWidget):
         log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s"
         self.log_message.emit(log_msg) # Hacky solution for now but should work
         
-        if self.controlling == ControlMode.GUIDEWIRE:
-            #print("guidewire go")
-            print("")
-        else:
-            #print("catheter go")
-            print("")
         # Call robot stuff here
+        self.driveCommand.emit(name)
 
     def stop(self):
         print("stop button pressed")
         log_msg = f"Stopping movement"
         self.log_message.emit(log_msg) # Hacky solution for now but should work
         
-        if self.controlling == ControlMode.GUIDEWIRE:
-            #print("guidewire stop")
-            print("")
-        else:
-            #print("catheter stop")
-            print("")
         # Call robot stuff here
+        self.stopCommand.emit()
 
     # Speed slider with buttons for presets
     def speedControl(self):
