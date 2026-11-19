@@ -56,6 +56,7 @@
 
 #include <Arduino.h>
 #include <SimpleFOC.h>
+#include <string>
 
 #define ENCODER1_PWM PC10
 #define ENCODER2_PWM PC11
@@ -88,6 +89,9 @@
 #define BTN_CW PB12
 #define BTN_CCW PB11
 
+#define UART_TX PA2
+#define UART_RX PA3
+
 unsigned long previousPrintTime = 0;
 const unsigned long printInterval = 100;
 
@@ -111,6 +115,10 @@ float current_moving_angle = 0.0f;
 
 bool guidewireMode = true;
 bool motorsEnabled = false;
+
+std::string command;
+std::string receivedMessage;
+std::string sendMessage;
 
 MagneticSensorPWM sensor1(ENCODER1_PWM, 4, 1000);
 MagneticSensorPWM sensor2(ENCODER2_PWM, 4, 1000);
@@ -157,13 +165,12 @@ void start()
 {
     if (!motorsEnabled && digitalRead(START) == LOW)
     {
-        digitalWrite(DRIVER1_EN, HIGH);
-        digitalWrite(DRIVER2_EN, HIGH);
-        digitalWrite(DRIVER3_EN, HIGH);
+        driver1.enable();
+        driver2.enable();
+        driver3.enable();
 
         motorsEnabled = true;
-
-        Serial.println("Motors enabled");
+        command.clear();
     }
 }
 
@@ -175,15 +182,16 @@ void triggerEmergencyStop()
 
     motorsEnabled = false;
 
-    Serial.println("EMERGENCY STOP");
-
+    Serial.println("ESTOP_TRIGGERED");
+    
+    command.clear();
     start();
 
 }
 
 void checkStop()
 {
-    if (digitalRead(ESTOP) == LOW)
+    if (digitalRead(ESTOP) == LOW || command == "STOP")
     {
         triggerEmergencyStop();
     }
@@ -191,8 +199,14 @@ void checkStop()
 
 void updateMode()
 {
-    guidewireMode =
-        digitalRead(MODE_SWITCH);
+    if (digitalRead(MODE_SWITCH) == LOW || command == "guidewire")
+    {
+        guidewireMode = true;
+    }
+    else if (digitalRead(MODE_SWITCH) == HIGH || command == "catheter")
+    {
+        guidewireMode = false;
+    }
 }
 
 void readSpeedButtons() 
@@ -270,11 +284,11 @@ void readControls()
         {
             target_velocity1 = 0.0f;
         }
-        else if (!digitalRead(BTN_FORWARD))
+        else if (!digitalRead(BTN_FORWARD) || command == "PUSH")
         {
             target_velocity1 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_BACK))
+        else if (!digitalRead(BTN_BACK) || command == "PULL")
         {
             target_velocity1 = -CONTROL_VELOCITY;
         }
@@ -283,11 +297,11 @@ void readControls()
         {
             target_velocity2 = 0.0f;
         }
-        else if (!digitalRead(BTN_CW))
+        else if (!digitalRead(BTN_CW) || command == "ROTATE-CW")
         {
             target_velocity2 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_CCW))
+        else if (!digitalRead(BTN_CCW) || command == "ROTATE-CCW")
         {
             target_velocity2 = -CONTROL_VELOCITY;
         }
@@ -298,11 +312,11 @@ void readControls()
         {
             target_velocity3 = 0.0f;
         }
-        else if (!digitalRead(BTN_FORWARD))
+        else if (!digitalRead(BTN_FORWARD) || command == "PUSH")
         {
             target_velocity3 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_BACK))
+        else if (!digitalRead(BTN_BACK) || command == "PULL")
         {
             target_velocity3 = -CONTROL_VELOCITY;
         }
@@ -332,6 +346,19 @@ void currentAngleUpdate() {
     }
     else if (current_moving_angle < 0.0f) {
         current_moving_angle += 360.0f;
+    }
+}
+
+void uiIntegration() {
+    if (Serial.available() > 0){
+        char receivedChar = Serial.read();
+        if (receivedChar =='\n'){
+            command = receivedMessage;
+            receivedMessage = "";
+        }
+        else{
+            receivedMessage += receivedChar;
+        }
     }
 }
 
@@ -407,11 +434,10 @@ void setup() {
 
     motorsEnabled = false;
 
-    Serial.println("Motors disabled - press START");
-
 }
 
 void loop() {
+    uiIntegration();
     start();
     readSpeedButtons();
     checkStop();
@@ -430,11 +456,7 @@ void loop() {
     if (millis() - previousPrintTime >= printInterval) {
         previousPrintTime = millis();
 
-        Serial.print("Mode: ");
-        Serial.print(guidewireMode ? "Guidewire" : "Catheter");
-
-        Serial.print("Angle of Moving motor: ");
-        Serial.print(current_moving_angle, 4);
-        Serial.print(" deg, ");
+        Serial.print("ANGLES,");
+        Serial.print(current_angle1, 2);
     }
 }
