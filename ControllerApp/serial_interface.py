@@ -25,6 +25,8 @@
 
 # Only identifies the vendor
 # Tested with a pi pico I have at home
+import serial
+import serial.tools.list_ports
 def check_ports():
     # Vendors list - https://www.usb.org/developers -> Valid Vendor IDs
     vendors = {

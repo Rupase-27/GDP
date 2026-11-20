@@ -7,14 +7,14 @@ import sys
 from PyQt5.QtWidgets import QApplication
 
 class GamepadControl(QObject):
-    # drive = pyqtSignal(str, float)
+    drive = pyqtSignal(str, float)
     
     def __init__(self):
         super().__init__()
         pygame.init()
         pygame.joystick.init()
         self.joystick = None
-        self.previous = None
+        self.previous = "stop"
         
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.callGamepad)
@@ -41,16 +41,22 @@ class GamepadControl(QObject):
         lx = self.joystick.get_axis(0) # Left stick horizontal axis
         ry = self.joystick.get_axis(4) # Right stick for speed control
         
+        action, value = "stop", 0.0
         if (abs(ly) > 0.1 or abs(lx) > 0.1) and abs(ry) > 0.1:
-            return # Ignore if both sticks are moved at the same time
-        
-        if abs(ly) > 0.1:
+            pass # Ignore if both sticks are moved at the same time
+        elif abs(ly) > 0.1:
             print("Move forward if positive, backward if negative " + str(ly))
+            action, value = ("forward" if ly > 0 else "back"), abs(ly)
         elif abs(lx) > 0.1:
             print("Rotate clockwise if positive, counterclockwise if negative " + str(lx))
+            action, value = ("cw" if lx > 0 else "anti-cw"), abs(lx)
         elif abs(ry) > 0.1:
             print("Speed increase if positive, decrease if negative " + str(ry))
-        
+            action, value = "speed", ry
+            
+        if action != self.previous or action == "speed":
+            self.drive.emit(action, value)
+        self.previous = action
             
 if __name__ == "__main__":
     app = QApplication(sys.argv)

@@ -1,1 +1,4 @@
-ControllerApp/__pycache__/guidewirePanel.cpython-313.pyc
+__pycache__/
+*.pyc
+ControllerApp/guidewireMatPlot.py
+ControllerApp/guidewirePanelSample.py
