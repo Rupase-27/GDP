@@ -3,13 +3,23 @@
 //  This code is designed to control 3 GM3506 motors using a STM32G491RE Nucleo board. 
 //  The motors are controlled using open-loop velocity control in SimpleFOC library
 //
+//  NOW the code contains UI integration using the USB - UART communication method already on
+//  the board.
+//
 //  The code allows for two modes of operation: guidewire and catheter mode, which can be 
-//  toggled using a switch. The motors can be enabled or disabled using a start button, 
-//  and an emergency stop button is provided for safety. The speed of the motors can be 
-//  adjusted using up and down buttons.
+//  toggled using a switch or through mode selection on the UI. The motors can be enabled or 
+//  disabled using a start button (only for physicla controller), and an emergency stop button 
+//  is provided for safety. The speed of the motors can be adjusted using up and down buttonsor 
+//  through speed selection on the UI.
 //
 //  doPWM1(), doPWM2(), doPWM3()
 //  - Interrupt service routines for handling PWM signals from the encoders
+//
+//  readCommunication()
+//  - Monitors serial communication from UI, reads it into command then sorts inside a struct for
+//    mode (catheter/guidewire), control(PUSH, PULL, ROTATE-CW, ROTATE-ACW), and speed
+//  - Inputs: None
+//  - Updates: Data struct
 //
 //  start() 
 //  - Enables the motors when the start button is pressed
@@ -23,15 +33,18 @@
 //
 //  checkStop() 
 //  - Checks if the emergency stop button is pressed and triggers emergency stop
+//  - UI - Checks control variable from USB comms
 //  - Inputs: None
 //
 //  updateMode() 
 //  - Reads the mode toggleswitch and updates the guidewireMode variable
+//  - UI - Reads the mode variable from USB comms and updates the guidewireMode variable
 //  - Inputs: None
 //  - Updates: guidewireMode
 //
 //  readControls()
 //  - Reads the state of control buttons and updates target velocities for each motor
+//  - UI - Reads the control variable from USB comms and updates velocities for each motor
 //  - Rotation disabled for catheter mode
 //  - Velocity set to 0 when fwd/back or cw/ccw buttons are pressed together
 //  - Inputs: None
@@ -41,6 +54,9 @@
 //  - Reads the state of speed control buttons and updates CONTROL_SPEED
 //  - Includes debounce logic with edge detection and time constraints to prevent multiple 
 //    increments/decrements from a single press
+//  - UI - Reads the int speed from USB comms and updates CONTROL_SPEED
+//  - UI - Calculates the number of SPEED_INCREMENTS from user changing to preset value and
+//         'jumps' to the corresponding CONTROL_SPEED
 //  - Inputs: None
 //  - Updates: CONTROL_SPEED
 //
@@ -157,7 +173,7 @@ void doPWM3() {
 void readCommunication() {
     string delimiter = " ";
     
-    // Used for string command - but what about int speeds
+    // Reading in from serial comms
     if (Serial.available() > 0){
         char receivedChar = Serial.read();
         if (receivedChar =='\n'){
@@ -169,7 +185,7 @@ void readCommunication() {
         }
     }
 
-    // command contains MODE COMMAND SPEED - need to split
+    // Command contains MODE COMMAND int(SPEED) - need to split
     size_t pos1 = command.find(delimiter);
     size_t pos2 = command.find(delimiter, pos1+1);
 
@@ -181,7 +197,7 @@ void readCommunication() {
 
 void start()
 {
-    if (!motorsEnabled && digitalRead(START) == LOW || command == "START")
+    if (!motorsEnabled && digitalRead(START) == LOW)
     {
         driver1.enable();
         driver2.enable();
