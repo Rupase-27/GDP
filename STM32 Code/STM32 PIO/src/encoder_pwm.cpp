@@ -57,6 +57,7 @@
 #include <Arduino.h>
 #include <SimpleFOC.h>
 #include <string>
+using namespace std;
 
 #define ENCODER1_PWM PC10
 #define ENCODER2_PWM PC11
@@ -89,19 +90,20 @@
 #define BTN_CW PB12
 #define BTN_CCW PB11
 
-#define UART_TX PA2
-#define UART_RX PA3
-
 unsigned long previousPrintTime = 0;
 const unsigned long printInterval = 100;
 
 float CONTROL_VELOCITY = 2.0f;
+
 const float MAX_VELOCITY = 5.0f;
 const unsigned long DEBOUNCE_TIME = 50;
+const float SPEED_INCREMENT = 0.2f;
 
 float target_velocity1 = 0.0f;
 float target_velocity2 = 0.0f;
 float target_velocity3 = 0.0f;
+
+int previousUISpeed = 0;
 
 float current_angle1 = 0.0f;
 float current_angle2 = 0.0f;
@@ -116,9 +118,17 @@ float current_moving_angle = 0.0f;
 bool guidewireMode = true;
 bool motorsEnabled = false;
 
-std::string command;
-std::string receivedMessage;
-std::string sendMessage;
+struct CommandData {
+    string mode;
+    string control;
+    int speed;
+};
+
+CommandData Data;
+
+string command;
+string receivedMessage;
+string sendMessage;
 
 MagneticSensorPWM sensor1(ENCODER1_PWM, 4, 1000);
 MagneticSensorPWM sensor2(ENCODER2_PWM, 4, 1000);
@@ -128,26 +138,9 @@ BLDCMotor motor1 = BLDCMotor(11);
 BLDCMotor motor2 = BLDCMotor(11);
 BLDCMotor motor3 = BLDCMotor(11);
 
-BLDCDriver3PWM driver1 = BLDCDriver3PWM(
-    IN1_1,
-    IN2_1,
-    IN3_1,
-    DRIVER1_EN
-);
-
-BLDCDriver3PWM driver2 = BLDCDriver3PWM(
-    IN1_2,
-    IN2_2,
-    IN3_2,
-    DRIVER2_EN
-);
-
-BLDCDriver3PWM driver3 = BLDCDriver3PWM(
-    IN1_3,
-    IN2_3,
-    IN3_3,
-    DRIVER3_EN
-);
+BLDCDriver3PWM driver1(IN1_1, IN2_1, IN3_1,DRIVER1_EN);
+BLDCDriver3PWM driver2(IN1_2, IN2_2, IN3_2, DRIVER2_EN);
+BLDCDriver3PWM driver3(IN1_3, IN2_3, IN3_3, DRIVER3_EN);
 
 void doPWM1() {
     sensor1.handlePWM();
@@ -161,9 +154,34 @@ void doPWM3() {
     sensor3.handlePWM();
 }
 
+void readCommunication() {
+    string delimiter = " ";
+    
+    // Used for string command - but what about int speeds
+    if (Serial.available() > 0){
+        char receivedChar = Serial.read();
+        if (receivedChar =='\n'){
+            command = receivedMessage;
+            receivedMessage = "";
+        }
+        else{
+            receivedMessage += receivedChar;
+        }
+    }
+
+    // command contains MODE COMMAND SPEED - need to split
+    size_t pos1 = command.find(delimiter);
+    size_t pos2 = command.find(delimiter, pos1+1);
+
+    Data.mode = command.substr(0, pos1);
+    Data.control = command.substr(pos1+1, pos2-pos1-1);
+    Data.speed = stoi(command.substr(pos2+1, command.length()-pos2-2));
+    
+}
+
 void start()
 {
-    if (!motorsEnabled && digitalRead(START) == LOW)
+    if (!motorsEnabled && digitalRead(START) == LOW || command == "START")
     {
         driver1.enable();
         driver2.enable();
@@ -211,8 +229,6 @@ void updateMode()
 
 void readSpeedButtons() 
 {
-    const float SPEED_INCREMENT = 0.2f;
-
     static bool lastUpReading = HIGH;
     static bool lastDownReading = HIGH;
 
@@ -270,6 +286,30 @@ void readSpeedButtons()
             }
         }
     }
+
+    // UI CONTROLS
+
+    int speedChange = Data.speed - previousUISpeed;
+
+    if (Data.speed > previousUISpeed){
+        CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
+
+        if (CONTROL_VELOCITY > 5.0f) {
+            CONTROL_VELOCITY = 5.0f;
+        }
+
+        previousUISpeed = Data.speed;
+    }
+    else if (Data.speed < previousUISpeed){
+
+        CONTROL_VELOCITY -= speedChange * SPEED_INCREMENT;
+
+        if (CONTROL_VELOCITY < 0.0f) {
+            CONTROL_VELOCITY = 0.0f;
+        }
+
+        previousUISpeed = Data.speed;
+    }
 }
 
 void readControls()
@@ -284,11 +324,11 @@ void readControls()
         {
             target_velocity1 = 0.0f;
         }
-        else if (!digitalRead(BTN_FORWARD) || command == "PUSH")
+        else if (!digitalRead(BTN_FORWARD) || Data.control == "PUSH")
         {
             target_velocity1 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_BACK) || command == "PULL")
+        else if (!digitalRead(BTN_BACK) || Data.control == "PULL")
         {
             target_velocity1 = -CONTROL_VELOCITY;
         }
@@ -297,11 +337,11 @@ void readControls()
         {
             target_velocity2 = 0.0f;
         }
-        else if (!digitalRead(BTN_CW) || command == "ROTATE-CW")
+        else if (!digitalRead(BTN_CW) || Data.control == "ROTATE-CW")
         {
             target_velocity2 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_CCW) || command == "ROTATE-CCW")
+        else if (!digitalRead(BTN_CCW) || Data.control == "ROTATE-ACW")
         {
             target_velocity2 = -CONTROL_VELOCITY;
         }
@@ -312,11 +352,11 @@ void readControls()
         {
             target_velocity3 = 0.0f;
         }
-        else if (!digitalRead(BTN_FORWARD) || command == "PUSH")
+        else if (!digitalRead(BTN_FORWARD) || Data.control == "PUSH")
         {
             target_velocity3 = CONTROL_VELOCITY;
         }
-        else if (!digitalRead(BTN_BACK) || command == "PULL")
+        else if (!digitalRead(BTN_BACK) || Data.control == "PULL")
         {
             target_velocity3 = -CONTROL_VELOCITY;
         }
@@ -346,19 +386,6 @@ void currentAngleUpdate() {
     }
     else if (current_moving_angle < 0.0f) {
         current_moving_angle += 360.0f;
-    }
-}
-
-void uiIntegration() {
-    if (Serial.available() > 0){
-        char receivedChar = Serial.read();
-        if (receivedChar =='\n'){
-            command = receivedMessage;
-            receivedMessage = "";
-        }
-        else{
-            receivedMessage += receivedChar;
-        }
     }
 }
 
@@ -437,7 +464,7 @@ void setup() {
 }
 
 void loop() {
-    uiIntegration();
+    readCommunication();
     start();
     readSpeedButtons();
     checkStop();
@@ -456,7 +483,7 @@ void loop() {
     if (millis() - previousPrintTime >= printInterval) {
         previousPrintTime = millis();
 
-        Serial.print("ANGLES,");
-        Serial.print(current_angle1, 2);
+        Serial.print("ANGLE ");
+        Serial.print(current_moving_angle, 2);
     }
 }
