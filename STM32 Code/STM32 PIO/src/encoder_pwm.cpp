@@ -23,6 +23,7 @@
 //
 //  start() 
 //  - Enables the motors when the start button is pressed
+//  - UI - Checks control variable from USB comms
 //  - Inputs: None
 //  - Updates: motorsEnabled
 //
@@ -197,7 +198,7 @@ void readCommunication() {
 
 void start()
 {
-    if (!motorsEnabled && digitalRead(START) == LOW)
+    if (!motorsEnabled && (digitalRead(START) == LOW || Data.control == "START"))
     {
         driver1.enable();
         driver2.enable();
