@@ -18,7 +18,9 @@ from datetime import datetime # Same here for logging
 class ControlPanel(QWidget):
     driveCommand = pyqtSignal(str)
     stopCommand = pyqtSignal()
+    startCommand = pyqtSignal()
     modeChanged = pyqtSignal(object)
+    speedChanged = pyqtSignal(int)
     
     controlling = ControlMode.GUIDEWIRE
     log_message = pyqtSignal(str) # Current message being sent to logs
@@ -46,6 +48,7 @@ class ControlPanel(QWidget):
         self.toggle_button.setCheckable(True)
         self.toggle_button.setMinimumSize(110, 70)
         self.toggle_button.clicked.connect(self.toggle)
+        self.toggle_button.setEnabled(False)
         layout.addWidget(self.toggle_button)
 
         return box
@@ -69,7 +72,7 @@ class ControlPanel(QWidget):
     # Defines the control panel with buttons to control push pull and rotation
     def controlPanel(self):
         box = QGroupBox("Movement")
-        grid = QGridLayout(box)
+        self.grid = QGridLayout(box)
 
         # Define buttons to control movement
         buttons = {
@@ -85,20 +88,42 @@ class ControlPanel(QWidget):
             btn.setObjectName(cmd)
             
             btn.pressed.connect(lambda name=cmd: self.start(name))
-            btn.released.connect(self.stop)
-            grid.addWidget(btn, row, col)
+            btn.released.connect(self.release)
+            self.grid.addWidget(btn, row, col)
+            btn.setEnabled(False) # Disabled until start button is pressed
 
         # Emergency stop button
-        estop = QPushButton("STOP")
-        estop.setMinimumSize(110, 70)
-        estop.setStyleSheet("background:#c0392b; color:white; font-weight:bold;")
-        estop.clicked.connect(self.stop)
-        grid.addWidget(estop, 1, 1)
+        self.estop = QPushButton("STOP")
+        self.estop.setMinimumSize(110, 70)
+        self.estop.setStyleSheet("background:#c0392b; color:white; font-weight:bold;")
+        self.estop.clicked.connect(self.stop)
+        
+        # Start button goes in place of estop before its pressed and then estop replaces it after pressed
+        self.startbutton = QPushButton("START")
+        self.startbutton.setMinimumSize(110, 70)
+        self.startbutton.setStyleSheet("background:#27ae60; color:white; font-weight:bold;")
+        self.startbutton.clicked.connect(self.startButton)
+        self.grid.addWidget(self.startbutton, 1, 1)
         return box
+    
+    def startButton(self):
+        # Make all buttons available to be pressed and then replace start button with estop
+        self.findChild(QPushButton, "forward").setEnabled(True)
+        self.findChild(QPushButton, "back").setEnabled(True)
+        self.findChild(QPushButton, "cw").setEnabled(not self.toggle_button.isChecked())
+        self.findChild(QPushButton, "anti-cw").setEnabled(not self.toggle_button.isChecked())
+        self.toggle_button.setEnabled(True)
+        # Replace start button with estop
+        self.grid.removeWidget(self.startbutton)
+        self.startbutton.hide()
+        self.grid.addWidget(self.estop, 1, 1)
+        self.estop.show()
+        
+        self.slider.setValue(0)
 
     def start(self, name):
         print(f"start button pressed: {name}")
-        log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s"
+        log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s" # CHANGE TO RADIANS??????
         self.log_message.emit(log_msg) # Hacky solution for now but should work
         
         # Call robot stuff here
@@ -111,6 +136,27 @@ class ControlPanel(QWidget):
         
         # Call robot stuff here
         self.stopCommand.emit()
+        
+        # Disable all buttons and put the start button back in place of estop
+        self.findChild(QPushButton, "forward").setEnabled(False)
+        self.findChild(QPushButton, "back").setEnabled(False)
+        self.findChild(QPushButton, "cw").setEnabled(False)
+        self.findChild(QPushButton, "anti-cw").setEnabled(False)
+        self.toggle_button.setEnabled(False)
+        # Replace estop with start button
+        self.grid.removeWidget(self.estop)
+        self.estop.hide()
+        self.grid.addWidget(self.startbutton, 1, 1)
+        self.startbutton.show()
+        
+        self.slider.setValue(0)
+
+    def release(self):
+        log_msg = f"Releasing movement"
+        self.log_message.emit(log_msg)
+        
+        # Call robot stuff here
+        self.driveCommand.emit("release")
 
     # Speed slider with buttons for presets
     def speedControl(self):
@@ -142,6 +188,7 @@ class ControlPanel(QWidget):
 
         # When slider is changed, updates speed and labels
         self.slider.valueChanged.connect(self.set_speed)
+        # self.slider.sliderReleased.connect(lambda: self.speedChanged.emit(self.speed))
         self.presets.buttonClicked[int].connect(self.slider.setValue)
         self.slider.setValue(self.speed)
         self.set_speed(self.speed)
@@ -155,6 +202,7 @@ class ControlPanel(QWidget):
         log_msg = f"Speed set to: {self.speed/1000:.3f}m/s"
         self.log_message.emit(log_msg) # Etc and stuff yeah
         
+        self.speedChanged.emit(self.speed)
         # Press the button if speed matches preset option
         btn = self.presets.button(speed)
         if btn:
