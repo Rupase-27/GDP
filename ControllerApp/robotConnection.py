@@ -34,6 +34,7 @@ class RobotConnection(QObject):
             return False
         self.timer.start(20)
         self.status.emit(f"Connected to device at {portName}.")
+        self.connected = True
         return True
 
     def disconnect(self):
