@@ -27,10 +27,10 @@ class MainApp(QObject):
         self.prevSpeed = 0.0
         
         # From UI to robot
-        self.controls.driveCommand.connect(self.sendStart)
+        self.controls.driveCommand.connect(self.sendGo)
         self.controls.stopCommand.connect(self.sendStop)
         self.controls.modeChanged.connect(lambda mode:self.stop())
-        self.controls.slider.valueChanged.connect(self.speedChange)
+        self.controls.speedChanged.connect(self.speedChange)
         
         # From gamepad to robot
         self.gamepad.drive.connect(self.handleGamepad)
@@ -48,7 +48,10 @@ class MainApp(QObject):
         self.connection.disconnect()
         
     # Commands
-    def sendStart(self, command):
+    def sendGo(self, command):
+        if command == "release":
+            self.sendReturn()
+            return
         mode = self.controls.controlling.value
         if mode == ControlMode.CATHETER and command in ROTATE_ACTIONS:
             return # Stops catheter from rotating
@@ -56,13 +59,18 @@ class MainApp(QObject):
         self.currentAction = command
         self.connection.move(mode, command, self.controls.speed)
         
+    def sendReturn():
+        self.connection.release()
+        
     def sendStop(self):
         self.currentAction = None
         self.connection.stop()
         
     def speedChange(self, value):
         if self.currentAction is not None:
-            self.sendStart(self.currentAction)
+            self.sendGo(self.currentAction)
+        # self.connection.move(self.controls.controlling.value, "speed", value)
+        self.connection.speedChange(value)
             
     # NOT SURE IF WORK YET dont bother testing either
     def handleGamepad(self, command, value):
@@ -78,7 +86,7 @@ class MainApp(QObject):
                     newSpeed = max(self.controls.speed - 1, 0.0)
                 self.controls.slider.setValue(int(newSpeed))
         else:
-            self.sendStart(command)
+            self.sendGo(command)
     
         
 def main():
