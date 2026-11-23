@@ -16,6 +16,7 @@ from datetime import datetime # Same here for logging
 
 # Used in left half of controller window
 class ControlPanel(QWidget):
+    # Commands that will be sent by the UI to be received in main 
     driveCommand = pyqtSignal(str)
     stopCommand = pyqtSignal()
     startCommand = pyqtSignal()
@@ -29,7 +30,7 @@ class ControlPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.speed = 10  # Default speed
+        self.speed = 0  # Default speed
 
         layout = QVBoxLayout(self)
         # Layout going top to bottom
@@ -87,7 +88,7 @@ class ControlPanel(QWidget):
             btn.setMinimumSize(110, 70)
             btn.setObjectName(cmd)
             
-            btn.pressed.connect(lambda name=cmd: self.start(name))
+            btn.pressed.connect(lambda name=cmd: self.go(name))
             btn.released.connect(self.release)
             self.grid.addWidget(btn, row, col)
             btn.setEnabled(False) # Disabled until start button is pressed
@@ -103,10 +104,16 @@ class ControlPanel(QWidget):
         self.startbutton.setMinimumSize(110, 70)
         self.startbutton.setStyleSheet("background:#27ae60; color:white; font-weight:bold;")
         self.startbutton.clicked.connect(self.startButton)
-        self.grid.addWidget(self.startbutton, 1, 1)
+        self.grid.addWidget(self.startbutton, 1, 1) # Start put on ui not stop yet (pyqt5 is weird so this might not have done anything)
         return box
     
     def startButton(self):
+        log_msg = f"Start button pressed"
+        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        
+        # Call robot stuff here
+        self.startCommand.emit()
+                
         # Make all buttons available to be pressed and then replace start button with estop
         self.findChild(QPushButton, "forward").setEnabled(True)
         self.findChild(QPushButton, "back").setEnabled(True)
@@ -119,19 +126,19 @@ class ControlPanel(QWidget):
         self.grid.addWidget(self.estop, 1, 1)
         self.estop.show()
         
-        self.slider.setValue(0)
-        self.startCommand.emit()
+        self.slider.setValue(0) # Oh yeah and speed will start at 0 of course
+        # self.startCommand.emit() # DONT FORGET THIS AGAIN # I Also changed is and moved it somewhere else
 
-    def start(self, name):
-        print(f"start button pressed: {name}")
+    def go(self, name):
+        print(f"Button pressed: {name}")
         log_msg = f"Starting movement: {name}, current speed {self.speed/1000:.3f}m/s" # CHANGE TO RADIANS??????
-        self.log_message.emit(log_msg) # Hacky solution for now but should work
+        self.log_message.emit(log_msg)
         
         # Call robot stuff here
         self.driveCommand.emit(name)
 
     def stop(self):
-        print("stop button pressed")
+        # print("stop button pressed")
         log_msg = f"Stopping movement"
         self.log_message.emit(log_msg) # Hacky solution for now but should work
         
@@ -150,7 +157,7 @@ class ControlPanel(QWidget):
         self.grid.addWidget(self.startbutton, 1, 1)
         self.startbutton.show()
         
-        self.slider.setValue(0)
+        self.slider.setValue(0) # Not needed but like...
 
     def release(self):
         log_msg = f"Releasing movement"
