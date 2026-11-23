@@ -80,7 +80,7 @@ class MainApp(QObject):
         self.connection.sendStart()
         
     # Mode tracked in a variable now so not constantly calling thingy
-    def setMode(mode):
+    def setMode(self, mode):
         if mode == ControlMode.CATHETER or mode == ControlMode.GUIDEWIRE:
             self.mode = mode
             
