@@ -46,6 +46,10 @@ float target_velocity3 = 0.0f;
 bool guidewireMode = true;
 bool motorsEnabled = false;
 
+// Globals 
+bool remoteControl = true;
+String serialBuffer = "";
+
 MagneticSensorPWM sensor1(ENCODER1_PWM, 4, 1000);
 MagneticSensorPWM sensor2(ENCODER2_PWM, 4, 1000);
 MagneticSensorPWM sensor3(ENCODER3_PWM, 4, 1000);
@@ -233,6 +237,114 @@ void readControls()
     }
 }
 
+// USB command parser
+
+// Turns text into commands for the motor 
+void processCommand(String cmd)
+{
+    cmd.trim();
+
+    Serial.print("RX:");
+    Serial.println(cmd);
+
+    if(cmd == "START")
+    {
+        driver1.enable();
+        driver2.enable();
+        driver3.enable();
+
+        motorsEnabled = true;
+
+        Serial.println("ACK START");
+        return;
+}
+
+    if(cmd == "ESTOP")
+    {
+        triggerEmergencyStop();
+
+        Serial.println("ACK ESTOP");
+        return;
+    }
+
+    if(cmd == "STOP")
+    {
+        target_velocity1 = 0.0f;
+        target_velocity2 = 0.0f;
+        target_velocity3 = 0.0f;
+
+        Serial.println("ACK STOP");
+        return;
+    }
+
+    int p1 = cmd.indexOf(' ');
+    int p2 = cmd.indexOf(' ', p1 + 1);
+
+    if(p1 < 0 || p2 < 0)
+    {
+        Serial.println("ERR FORMAT");
+        return;
+    }
+
+    String mode = cmd.substring(0, p1);
+    String action = cmd.substring(p1 + 1, p2);
+    float speed = cmd.substring(p2 + 1).toFloat();
+
+    // Ensure speed is within bounds
+    target_velocity1 = 0.0f;
+    target_velocity2 = 0.0f;
+    target_velocity3 = 0.0f;
+
+    if(mode == "guidewire")
+    {
+        if(action == "PUSH")
+            target_velocity1 = speed;
+
+        else if(action == "PULL")
+            target_velocity1 = -speed;
+
+        else if(action == "ROTATE-CW")
+            target_velocity2 = speed;
+
+        else if(action == "ROTATE-ACW")
+            target_velocity2 = -speed;
+    }
+
+    if(mode == "catheter")
+    {
+        if(action == "PUSH")
+            target_velocity3 = speed;
+
+        else if(action == "PULL")
+            target_velocity3 = -speed;
+    }
+
+    Serial.println("ACK");
+}
+
+//recieves text from python over USB
+void readSerialCommands()
+{    
+    while(Serial.available())
+    {
+        char c = Serial.read();
+
+        if(c == '\n')
+        {
+            processCommand(serialBuffer);
+            serialBuffer = "";
+        }
+        else if(c != '\r')
+        {
+            serialBuffer += c;
+        }
+    }
+}
+
+
+
+
+
 void setup() {
     Serial.begin(115200);
     delay(1000);
@@ -306,6 +418,9 @@ void setup() {
 }
 
 void loop() {
+
+    readSerialCommands();
+
     sensor1.update();
     sensor2.update();
     sensor3.update();
@@ -314,7 +429,12 @@ void loop() {
     readSpeedButtons();
     checkStop();
     updateMode();
+
+    // Disables physical controller when using GUI
+    if(!remoteControl)
+    {
     readControls();
+    }
 
     motor1.loopFOC();
     motor2.loopFOC();
