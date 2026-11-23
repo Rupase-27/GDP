@@ -59,6 +59,9 @@ class RobotConnection(QObject):
     def speedChange(self, value):
         self.send(f"Speed: {value}")
         
+    def sendStart(self):
+        self.send("START")
+    
     # Send a command to the robot
     def send(self, line):
         if self.connected:

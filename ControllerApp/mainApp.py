@@ -31,6 +31,7 @@ class MainApp(QObject):
         self.controls.stopCommand.connect(self.sendStop)
         self.controls.modeChanged.connect(lambda mode:self.stop())
         self.controls.speedChanged.connect(self.speedChange)
+        self.controls.startCommand.connect(self.startButton)
         
         # From gamepad to robot
         self.gamepad.drive.connect(self.handleGamepad)
@@ -47,6 +48,9 @@ class MainApp(QObject):
         self.sendStop()
         self.connection.disconnect()
         
+    def startButton(self):
+        self.connection.sendStart()
+    
     # Commands
     def sendGo(self, command):
         if command == "release":

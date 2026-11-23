@@ -120,6 +120,7 @@ class ControlPanel(QWidget):
         self.estop.show()
         
         self.slider.setValue(0)
+        self.startCommand.emit()
 
     def start(self, name):
         print(f"start button pressed: {name}")
