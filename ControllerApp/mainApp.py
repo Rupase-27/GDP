@@ -29,7 +29,7 @@ class MainApp(QObject):
         # From UI to robot
         self.controls.driveCommand.connect(self.sendGo)
         self.controls.stopCommand.connect(self.sendStop)
-        self.controls.modeChanged.connect(lambda mode:self.setMode())
+        self.controls.modeChanged.connect(lambda mode:self.setMode(mode))
         # self.controls.speedChanged.connect(self.speedChange)
         self.controls.startCommand.connect(self.startButton)
         
