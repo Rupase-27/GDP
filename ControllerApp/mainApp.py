@@ -67,7 +67,7 @@ class MainApp(QObject):
         self.currentAction = None
         self.connection.stop()
             
-    def sendReturn():
+    def sendReturn(self):
         self.connection.release()
         
     def speedChange(self, value):
