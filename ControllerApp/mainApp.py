@@ -30,7 +30,7 @@ class MainApp(QObject):
         self.controls.driveCommand.connect(self.sendGo)
         self.controls.stopCommand.connect(self.sendStop)
         self.controls.modeChanged.connect(lambda mode:self.setMode())
-        self.controls.speedChanged.connect(self.speedChange)
+        # self.controls.speedChanged.connect(self.speedChange)
         self.controls.startCommand.connect(self.startButton)
         
         # From gamepad to robot
@@ -71,8 +71,9 @@ class MainApp(QObject):
         self.connection.release()
         
     def speedChange(self, value):
-        if self.currentAction is not None:
-            self.sendGo(self.currentAction)
+        # if self.currentAction is not None:
+        #     self.sendGo(self.currentAction)
+        
         # self.connection.move(self.controls.controlling.value, "speed", value)
         self.connection.speedChange(value)
         

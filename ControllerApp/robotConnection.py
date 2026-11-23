@@ -54,7 +54,9 @@ class RobotConnection(QObject):
         self.send("STOP")
         
     def release(self):
-        self.send("release")
+        # self.send("release")
+        # line = f"{self.DEVICE_CODES[self.mode]} {"START"} {0}"
+        self.send(self.COMMANDS["release"])
         
     def speedChange(self, value):
         self.send(f"Speed: {value}")
