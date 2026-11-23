@@ -8,8 +8,8 @@ class RobotConnection(QObject):
     status = pyqtSignal(str)
     messageReceived = pyqtSignal(str)
     
-    DEVICE_CODES = {ControlMode.GUIDEWIRE: b'guidewire', ControlMode.CATHETER: b'catheter', "speed": b'speed'}
-    COMMANDS = { "forward": b'PUSH', "back": b'PULL', "cw": b'ROTATE-CW', "anti-cw": b'ROTATE-ACW', "stop": b'STOP', "release": b'RELEASE' }
+    DEVICE_CODES = {ControlMode.GUIDEWIRE: "guidewire", ControlMode.CATHETER: "catheter", "speed": b'speed'}
+    COMMANDS = { "forward": "PUSH", "back": "PULL", "cw": "ROTATE-CW", "anti-cw": "ROTATE-ACW", "stop": "STOP", "release": "RELEASE", "start": "START" }
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -59,8 +59,12 @@ class RobotConnection(QObject):
     def speedChange(self, value):
         self.send(f"Speed: {value}")
         
-    def sendStart(self):
-        self.send("START")
+    def sendModeChange(self, mode):
+        self.send(self.DEVICE_CODES[mode])
+        
+    # def sendStart(self):
+        # self.send("START")
+        # self.move()
     
     # Send a command to the robot
     def send(self, line):

@@ -77,12 +77,14 @@ class MainApp(QObject):
         self.connection.speedChange(value)
         
     def startButton(self):
-        self.connection.sendStart()
+        # self.connection.sendStart()
+        self.connection.move(self.mode, "start", self.controls.speed)
         
     # Mode tracked in a variable now so not constantly calling thingy
     def setMode(self, mode):
         if mode == ControlMode.CATHETER or mode == ControlMode.GUIDEWIRE:
             self.mode = mode
+        self.connection.sendModeChange(mode)
             
     # NOT SURE IF WORK YET dont bother testing either
     def handleGamepad(self, command, value):
