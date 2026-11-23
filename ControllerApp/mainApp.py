@@ -29,7 +29,7 @@ class MainApp(QObject):
         # From UI to robot
         self.controls.driveCommand.connect(self.sendGo)
         self.controls.stopCommand.connect(self.sendStop)
-        self.controls.modeChanged.connect(lambda mode:self.stop())
+        self.controls.modeChanged.connect(lambda mode:self.setMode())
         self.controls.speedChanged.connect(self.speedChange)
         self.controls.startCommand.connect(self.startButton)
         
@@ -40,6 +40,9 @@ class MainApp(QObject):
         self.connection.status.connect(self.ui.add_log)
         self.connection.messageReceived.connect(lambda msg:self.ui.add_log(f"Received: {msg}"))
         
+        self.mode = self.controls.controlling.value
+        
+    # shutdown is not called yet
     def start(self):
         self.ui.show()
         self.connection.connect()
@@ -47,34 +50,39 @@ class MainApp(QObject):
     def shutdown(self):
         self.sendStop()
         self.connection.disconnect()
-        
-    def startButton(self):
-        self.connection.sendStart()
     
     # Commands
     def sendGo(self, command):
         if command == "release":
             self.sendReturn()
             return
-        mode = self.controls.controlling.value
-        if mode == ControlMode.CATHETER and command in ROTATE_ACTIONS:
+        # mode = self.controls.controlling.value
+        if self.mode == ControlMode.CATHETER and command in ROTATE_ACTIONS:
             return # Stops catheter from rotating
         
         self.currentAction = command
-        self.connection.move(mode, command, self.controls.speed)
-        
-    def sendReturn():
-        self.connection.release()
+        self.connection.move(self.mode, command, self.controls.speed)
         
     def sendStop(self):
         self.currentAction = None
         self.connection.stop()
+            
+    def sendReturn():
+        self.connection.release()
         
     def speedChange(self, value):
         if self.currentAction is not None:
             self.sendGo(self.currentAction)
         # self.connection.move(self.controls.controlling.value, "speed", value)
         self.connection.speedChange(value)
+        
+    def startButton(self):
+        self.connection.sendStart()
+        
+    # Mode tracked in a variable now so not constantly calling thingy
+    def setMode(mode):
+        if mode == ControlMode.CATHETER or mode == ControlMode.GUIDEWIRE:
+            self.mode = mode
             
     # NOT SURE IF WORK YET dont bother testing either
     def handleGamepad(self, command, value):
