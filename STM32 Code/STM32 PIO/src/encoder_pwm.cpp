@@ -132,6 +132,10 @@ float previous_angle3 = 0.0f;
 
 float current_moving_angle = 0.0f;
 
+float accumulatedGuidewireRotation = 0.0f;
+flat lastGuidewireAngle = 0.0f;
+const float GUIDEWIRE_ROT_LIMIT = 180.0f;
+
 bool guidewireMode = true;
 bool UIControl = true;
 bool motorsEnabled = false;
@@ -186,34 +190,40 @@ void readCommunication() {
             command = receivedMessage;
             receivedMessage.clear();
 
-            size_t pos1 = command.find(' ');
-            size_t pos2 = command.find(' ', pos1 + 1);
-
-            if (pos1 != string::npos && pos2 != string::npos){
-                Data.mode = command.substr(0, pos1);
-                Data.control = command.substr(pos1 + 1, pos2 - pos1 - 1);
-
-                char speedCharacter = command[pos2 + 1];
-
-                if (speedCharacter >= '0' && speedCharacter <= '9'){
-                    Data.speed = speedCharacter - '0';
-
+            if(command == "RESET_ROTATION")
+                {
+                    accumulatedGuidewireRotation = 0.0f;
+                    Serial.println("ROTATION_RESET");
                 }
+            else 
+            {
+                size_t pos1 = command.find(' ');
+                size_t pos2 = command.find(' ', pos1 + 1);
+
+                if (pos1 != string::npos && pos2 != string::npos){
+                    Data.mode = command.substr(0, pos1);
+                    Data.control = command.substr(pos1 + 1, pos2 - pos1 - 1);
+
+                    char speedCharacter = command[pos2 + 1];
+
+                    if (speedCharacter >= '0' && speedCharacter <= '9'){
+                    Data.speed = speedCharacter - '0';
+                    }
                 else {
                     Serial.println("Invalid speed");
+                    }
                 }
-            }
             else {
                 Serial.println("Invalid command");
+                }
             }
-
             command.clear();
         }
         else {
             receivedMessage += receivedChar;
+            }
         }
     }
-}
 
 void controlMethod() {
     if (Data.x == "UI") {
@@ -383,12 +393,24 @@ void readControls(){
             else if (Data.control == "PULL"){
                 target_velocity1 = -CONTROL_VELOCITY;
             }
-
             if (Data.control == "ROTATE-CW"){
+                if(accumulatedGuidewireRotation < GUIDEWIRE_ROT_LIMIT){
                 target_velocity2 = CONTROL_VELOCITY;
+                }
+                else { 
+                    target_velocity2 = 0.0f;
+                    Serial.println("CW_LIMIT_REACHED");
+                }
             }
             else if (Data.control == "ROTATE-ACW"){
+                if(accumulatedGuidewireRotation > -GUIDEWIRE_ROT_LIMIT)
+                {
                 target_velocity2 = -CONTROL_VELOCITY;
+                }
+                else{
+                    target_velocity2 = 0.0f;
+                    Serial.println("CCW_LIMIT_REACHED");
+                }
             }
         }
         else
@@ -417,13 +439,24 @@ void readControls(){
             if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW)){
                 target_velocity2 = 0.0f;
             }
-            else if (!digitalRead(BTN_CW)){
+            else if (!digitalRead(BTN_CW))
+            {
+                if(accumulateGuidewireRotation < GUIDEWIRE_ROT_LIMIT){
                 target_velocity2 = CONTROL_VELOCITY;
             }
-            else if (!digitalRead(BTN_CCW)){
+                else {
+                    target_velcity1 = 0.0f;
+                }
+            else if (!digitalRead(BTN_CCW))
+            {
+                if(accumulateGuidewireRotation > GUIDEWIRE_ROT_LIMIT)
+                {
                 target_velocity2 = -CONTROL_VELOCITY;
+                }
+                else {
+                    target_velocity2 = 0.0f;
+                }
             }
-        }
         else
         {
             if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
@@ -468,6 +501,26 @@ void currentAngleUpdate() {
         current_moving_angle += 360.0f;
     }
 }
+
+void updateGuidewireRotation()
+{
+    float currentAngle = sensor2.getAngle();
+    float delta = currentAngle - lastGuidewireAngle;
+
+    if(delta > PI)
+    {
+        delta -= 2.0f * PI; 
+    }
+    else if(delta < -PI)
+    {
+        delta += 2.0f * PI;
+    }
+
+    accumulatedGuidewireRotation += delta * 180.0f / PI;
+    lastGuidewireAngle = currentAngle;
+}
+
+
 
 void setup() {
     Serial.begin(115200);
@@ -539,6 +592,8 @@ void setup() {
     previous_angle2 = sensor2.getAngle();
     previous_angle3 = sensor3.getAngle();
 
+    lastGuidewireAngle = sensor2.getAngle();
+
     motorsEnabled = false;
 
 }
@@ -553,6 +608,7 @@ void loop() {
     readSpeedButtons();
     readControls();
     currentAngleUpdate();
+    updateGuidewireRotation()
 
     motor1.loopFOC();
     motor2.loopFOC();
@@ -567,5 +623,8 @@ void loop() {
 
         Serial.print("ANGLE ");
         Serial.print(current_moving_angle, 2);
+
+        serial.print("ROTATION");
+        serial.print(accumulatedGuidewireRotation, 1);
     }
 }
