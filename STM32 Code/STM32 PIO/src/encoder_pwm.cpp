@@ -110,11 +110,11 @@ using namespace std;
 unsigned long previousPrintTime = 0;
 const unsigned long printInterval = 100;
 
-float CONTROL_VELOCITY = 2.0f;
+float CONTROL_VELOCITY = 0.0f;
 
-const float MAX_VELOCITY = 5.0f;
+const float MAX_VELOCITY = 0.2f;
 const unsigned long DEBOUNCE_TIME = 50;
-const float SPEED_INCREMENT = 0.2f;
+const float SPEED_INCREMENT = 0.01f;
 
 float target_velocity1 = 0.0f;
 float target_velocity2 = 0.0f;
@@ -133,9 +133,11 @@ float previous_angle3 = 0.0f;
 float current_moving_angle = 0.0f;
 
 bool guidewireMode = true;
+bool UIControl = true;
 bool motorsEnabled = false;
 
 struct CommandData {
+    string x;
     string mode;
     string control;
     int speed;
@@ -172,45 +174,80 @@ void doPWM3() {
 }
 
 void readCommunication() {
-    string delimiter = " ";
-    
-    // Reading in from serial comms
-    if (Serial.available() > 0){
+    while (Serial.available() > 0)
+    {
         char receivedChar = Serial.read();
-        if (receivedChar =='\n'){
-            command = receivedMessage;
-            receivedMessage = "";
+
+        if (receivedChar == '\r'){
+            continue;
         }
-        else{
+
+        if (receivedChar == '\n'){
+            command = receivedMessage;
+            receivedMessage.clear();
+
+            size_t pos1 = command.find(' ');
+            size_t pos2 = command.find(' ', pos1 + 1);
+
+            if (pos1 != string::npos && pos2 != string::npos){
+                Data.mode = command.substr(0, pos1);
+                Data.control = command.substr(pos1 + 1, pos2 - pos1 - 1);
+
+                char speedCharacter = command[pos2 + 1];
+
+                if (speedCharacter >= '0' && speedCharacter <= '9'){
+                    Data.speed = speedCharacter - '0';
+
+                }
+                else {
+                    Serial.println("Invalid speed");
+                }
+            }
+            else {
+                Serial.println("Invalid command");
+            }
+
+            command.clear();
+        }
+        else {
             receivedMessage += receivedChar;
         }
     }
-
-    // Command contains MODE COMMAND int(SPEED) - need to split
-    size_t pos1 = command.find(delimiter);
-    size_t pos2 = command.find(delimiter, pos1+1);
-
-    Data.mode = command.substr(0, pos1);
-    Data.control = command.substr(pos1+1, pos2-pos1-1);
-    Data.speed = stoi(command.substr(pos2+1, command.length()-pos2-2));
-    
 }
 
-void start()
-{
-    if (!motorsEnabled && (digitalRead(START) == LOW || Data.control == "START"))
-    {
-        driver1.enable();
-        driver2.enable();
-        driver3.enable();
-
-        motorsEnabled = true;
-        command.clear();
+void controlMethod() {
+    if (Data.x == "UI") {
+        UIControl = true;
+    }
+    else if (Data.x == "BUTTON") {
+        UIControl = false;
     }
 }
 
-void triggerEmergencyStop()
-{
+void start() {
+    if (UIControl) {
+        if (!motorsEnabled && Data.control == "START") {
+            driver1.enable();
+            driver2.enable();
+            driver3.enable();
+
+            motorsEnabled = true;
+            command.clear();
+        }
+    }
+    else {
+        if (!motorsEnabled && (digitalRead(START) == LOW)) {
+            driver1.enable();
+            driver2.enable();
+            driver3.enable();
+
+            motorsEnabled = true;
+            command.clear();
+        }
+    }
+}
+
+void triggerEmergencyStop() {
     driver1.disable();
     driver2.disable();
     driver3.disable();
@@ -221,31 +258,34 @@ void triggerEmergencyStop()
     
     command.clear();
     start();
-
 }
 
-void checkStop()
-{
-    if (digitalRead(ESTOP) == LOW || command == "STOP")
-    {
+void checkStop(){
+    if (digitalRead(ESTOP) == LOW || command == "STOP") {
         triggerEmergencyStop();
     }
 }
 
-void updateMode()
-{
-    if (digitalRead(MODE_SWITCH) == LOW || command == "guidewire")
-    {
-        guidewireMode = true;
+void updateMode() {
+    if (UIControl) {
+        if (command == "guidewire") {
+            guidewireMode = true;
+        }
+        else if (command == "catheter") {
+            guidewireMode = false;
+        }
     }
-    else if (digitalRead(MODE_SWITCH) == HIGH || command == "catheter")
-    {
-        guidewireMode = false;
+    else {
+        if (digitalRead(MODE_SWITCH) == LOW) {
+            guidewireMode = true;
+        }
+        else if (digitalRead(MODE_SWITCH) == HIGH) {
+            guidewireMode = false;
+        }
     }
 }
 
-void readSpeedButtons() 
-{
+void readSpeedButtons() {
     static bool lastUpReading = HIGH;
     static bool lastDownReading = HIGH;
 
@@ -260,127 +300,150 @@ void readSpeedButtons()
     bool upRead = digitalRead(UP_SPEED);
     bool downRead = digitalRead(DOWN_SPEED);
 
-    if (upRead != lastUpReading) {
-        upChangeTime = currentTime;
-        lastUpReading = upRead;
+    if (UIControl){
+        int speedChange = Data.speed - previousUISpeed;
+
+        if (Data.speed > previousUISpeed){
+            CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
+
+            if (CONTROL_VELOCITY > 5.0f) {
+                CONTROL_VELOCITY = 5.0f;
+            }
+
+            previousUISpeed = Data.speed;
+        }
+        else if (Data.speed < previousUISpeed){
+
+            CONTROL_VELOCITY -= speedChange * SPEED_INCREMENT;
+
+            if (CONTROL_VELOCITY < 0.0f) {
+                CONTROL_VELOCITY = 0.0f;
+            }
+
+            previousUISpeed = Data.speed;
+        }
     }
+    else {
+        if (upRead != lastUpReading) {
+            upChangeTime = currentTime;
+            lastUpReading = upRead;
+        }
 
-    if ((currentTime - upChangeTime) >= DEBOUNCE_TIME) {
-        if (upRead != stableUpState) {
-            stableUpState = upRead;
+        if ((currentTime - upChangeTime) >= DEBOUNCE_TIME) {
+            if (upRead != stableUpState) {
+                stableUpState = upRead;
 
-            if (stableUpState == LOW) {
-                CONTROL_VELOCITY += SPEED_INCREMENT;
+                if (stableUpState == LOW) {
+                    CONTROL_VELOCITY += SPEED_INCREMENT;
 
-                if (CONTROL_VELOCITY > MAX_VELOCITY) {
-                    CONTROL_VELOCITY = MAX_VELOCITY;
+                    if (CONTROL_VELOCITY > MAX_VELOCITY) {
+                        CONTROL_VELOCITY = MAX_VELOCITY;
+                    }
+
+                    Serial.print("Velocity increased to: ");
+                    Serial.println(CONTROL_VELOCITY, 2);
                 }
-
-                Serial.print("Velocity increased to: ");
-                Serial.println(CONTROL_VELOCITY, 2);
             }
         }
-    }
+        if (downRead != lastDownReading) {
+            downChangeTime = currentTime;
+            lastDownReading = downRead;
+        }
 
-    if (downRead != lastDownReading) {
-        downChangeTime = currentTime;
-        lastDownReading = downRead;
-    }
+        if ((currentTime - downChangeTime) >= DEBOUNCE_TIME) {
+            if (downRead != stableDownState) {
+                stableDownState = downRead;
 
-    if ((currentTime - downChangeTime) >= DEBOUNCE_TIME) {
-        if (downRead != stableDownState) {
-            stableDownState = downRead;
+                if (stableDownState == LOW) {
+                    CONTROL_VELOCITY -= SPEED_INCREMENT;
 
-            if (stableDownState == LOW) {
-                CONTROL_VELOCITY -= SPEED_INCREMENT;
+                    if (CONTROL_VELOCITY < 0.0f) {
+                        CONTROL_VELOCITY = 0.0f;
+                    }
 
-                if (CONTROL_VELOCITY < 0.0f) {
-                    CONTROL_VELOCITY = 0.0f;
+                    Serial.print("Velocity decreased to: ");
+                    Serial.println(CONTROL_VELOCITY, 2);
                 }
-
-                Serial.print("Velocity decreased to: ");
-                Serial.println(CONTROL_VELOCITY, 2);
             }
         }
-    }
-
-    // UI CONTROLS
-
-    int speedChange = Data.speed - previousUISpeed;
-
-    if (Data.speed > previousUISpeed){
-        CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
-
-        if (CONTROL_VELOCITY > 5.0f) {
-            CONTROL_VELOCITY = 5.0f;
-        }
-
-        previousUISpeed = Data.speed;
-    }
-    else if (Data.speed < previousUISpeed){
-
-        CONTROL_VELOCITY -= speedChange * SPEED_INCREMENT;
-
-        if (CONTROL_VELOCITY < 0.0f) {
-            CONTROL_VELOCITY = 0.0f;
-        }
-
-        previousUISpeed = Data.speed;
     }
 }
 
-void readControls()
-{
+void readControls(){
     target_velocity1 = 0.0f;
     target_velocity2 = 0.0f;
     target_velocity3 = 0.0f;
 
-    if (guidewireMode)
-    {
-        if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK))
+    if (UIControl){
+        if (guidewireMode)
         {
-            target_velocity1 = 0.0f;
-        }
-        else if (!digitalRead(BTN_FORWARD) || Data.control == "PUSH")
-        {
-            target_velocity1 = CONTROL_VELOCITY;
-        }
-        else if (!digitalRead(BTN_BACK) || Data.control == "PULL")
-        {
-            target_velocity1 = -CONTROL_VELOCITY;
-        }
+            if (Data.control == "PUSH"){
+                target_velocity1 = CONTROL_VELOCITY;
+            }
+            else if (Data.control == "PULL"){
+                target_velocity1 = -CONTROL_VELOCITY;
+            }
 
-        if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW))
-        {
-            target_velocity2 = 0.0f;
+            if (Data.control == "ROTATE-CW"){
+                target_velocity2 = CONTROL_VELOCITY;
+            }
+            else if (Data.control == "ROTATE-ACW"){
+                target_velocity2 = -CONTROL_VELOCITY;
+            }
         }
-        else if (!digitalRead(BTN_CW) || Data.control == "ROTATE-CW")
+        else
         {
-            target_velocity2 = CONTROL_VELOCITY;
-        }
-        else if (!digitalRead(BTN_CCW) || Data.control == "ROTATE-ACW")
-        {
-            target_velocity2 = -CONTROL_VELOCITY;
+            if (Data.control == "PUSH"){
+                target_velocity3 = CONTROL_VELOCITY;
+            }
+            else if (Data.control == "PULL"){
+                target_velocity3 = -CONTROL_VELOCITY;
+            }
         }
     }
-    else
-    {
-        if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK))
+    else {
+        if (guidewireMode)
         {
-            target_velocity3 = 0.0f;
+            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
+                target_velocity1 = 0.0f;
+            }
+            else if (!digitalRead(BTN_FORWARD)){
+                target_velocity1 = CONTROL_VELOCITY;
+            }
+            else if (!digitalRead(BTN_BACK)){
+                target_velocity1 = -CONTROL_VELOCITY;
+            }
+
+            if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW)){
+                target_velocity2 = 0.0f;
+            }
+            else if (!digitalRead(BTN_CW)){
+                target_velocity2 = CONTROL_VELOCITY;
+            }
+            else if (!digitalRead(BTN_CCW)){
+                target_velocity2 = -CONTROL_VELOCITY;
+            }
         }
-        else if (!digitalRead(BTN_FORWARD) || Data.control == "PUSH")
+        else
         {
-            target_velocity3 = CONTROL_VELOCITY;
-        }
-        else if (!digitalRead(BTN_BACK) || Data.control == "PULL")
-        {
-            target_velocity3 = -CONTROL_VELOCITY;
+            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
+                target_velocity3 = 0.0f;
+            }
+            else if (!digitalRead(BTN_FORWARD)){
+                target_velocity3 = CONTROL_VELOCITY;
+            }
+            else if (!digitalRead(BTN_BACK)){
+                target_velocity3 = -CONTROL_VELOCITY;
+            }
         }
     }
 }
 
 void currentAngleUpdate() {
+    sensor1.update();
+    sensor2.update();
+    sensor3.update();
+
     current_angle1 = sensor1.getAngle();
     current_angle2 = sensor2.getAngle();
     current_angle3 = sensor3.getAngle();
@@ -481,11 +544,13 @@ void setup() {
 }
 
 void loop() {
+    
     readCommunication();
+    controlMethod();
     start();
-    readSpeedButtons();
     checkStop();
     updateMode();
+    readSpeedButtons();
     readControls();
     currentAngleUpdate();
 
