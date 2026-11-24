@@ -67,6 +67,29 @@
 //  - Inputs: None
 //  - Updates: current_moving_angle
 //
+//  updateGuidewireRotation()
+// - Tracks cumulative guidewire rotation using 2 encoder feedback
+// - Compensates for encoder wraparound to miantain continour rotation count
+// - Used as an alternative way to measure torsional loading in the guidewire
+// - Inputs: Encoder angle from sensor2
+// - Updates: accumulationGuidewireRotation
+//
+//  Guidewire Torsion Protection
+// - Limits accumulated guidewire roation to +/- 180 degrees
+// - Prevents excessive torsion wind-up if the distal guidewire tip becomes stuck
+// - Reduces stored elastic energy and strain witin the guidewire
+// - Additional rotation commands are ignored once the limit is reached
+// - Rotation must be returned toward zero before further twisting is enabled
+//
+//  RESET_ROTATION Command
+// - Resets accumulatedGuidewireRotation to zero
+// - Intended to be used after guidewire repositioning 
+//
+//  Safety Features: 
+// - Emergency stop disbales all motors immediately
+// - Guidewire accumulation rotatio tracking using encoder feedback
+// - +/- 180 degree guidewire torision limit to reduce risk of excessive twist, strain, and sudden unwinding 
+//
 ////////////////////////////////////////////////////////////////////////////////
 
 
@@ -133,7 +156,7 @@ float previous_angle3 = 0.0f;
 float current_moving_angle = 0.0f;
 
 float accumulatedGuidewireRotation = 0.0f;
-flat lastGuidewireAngle = 0.0f;
+float lastGuidewireAngle = 0.0f;
 const float GUIDEWIRE_ROT_LIMIT = 180.0f;
 
 bool guidewireMode = true;
