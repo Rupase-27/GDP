@@ -232,9 +232,14 @@ class PlaceholderPanel(QGroupBox):
         self.body.setStyleSheet("color:gray;")
         lay.addWidget(self.body)
 
+class LiveShapePanel(QGroupBox):
+    def __init__(self, fig, parent=None):
+        super().__init__("Guidewire Shape", parent)
+        QVBoxLayout(self).addWidget(fig.canvas)
+
 # The actual window that shows up when launched
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, guidewire_fig=None): # Receives the guidewire visualiser
         super().__init__()
         self.setWindowTitle("Controller")
         self.resize(1650, 1050)
@@ -258,7 +263,11 @@ class MainWindow(QMainWindow):
         log_lay.addWidget(self.log)
         self.controls.log_message.connect(self.add_log)
         
-        self.guidewire_state = GuidewirePanel() # This will also be somewhere else later
+        # By default uses an example file
+        if guidewire_fig is not None:
+            self.guidewire_state = LiveShapePanel(guidewire_fig)
+        else:
+            self.guidewire_state = GuidewirePanel()
 
         right.addWidget(self.camera_panel, 2)
         right.addWidget(self.guidewire_state, 3)

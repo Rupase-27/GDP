@@ -11,14 +11,24 @@ from controllerGUI import ControlMode, MainWindow
 from gamepadControl import GamepadControl # Once we're sure we want this
 from robotConnection import RobotConnection
 
+# If not on test machine, can run correctly despite not having necessary files
+VISUALISER_DIR = Path(__file__).resolve().parent.parent / "RealTimeVisualiserCollection"
+sys.path.insert(0, str(VISUALISER_DIR))
+vis = None
+try:
+    import RealTimeVisualiser as vis
+except ImportError as e:
+    print(f"Visualiser unavailable: {e}")
+    vis = None
+
 ROTATE_ACTIONS = {"cw", "anti-cw"}
 
 class MainApp(QObject):
     SPEED_STEP_INTERVAL = 0.01 # Interval for speed increase/decrease when using gamepad
     
-    def __init__(self):
+    def __init__(self, guidewire_fig=None):
         super().__init__()
-        self.ui = MainWindow()
+        self.ui = MainWindow(guidewire_fig=guidewire_fig)
         self.controls = self.ui.controls
         self.connection = RobotConnection(self)
         self.gamepad = GamepadControl()
@@ -102,14 +112,19 @@ class MainApp(QObject):
                 self.controls.slider.setValue(int(newSpeed))
         else:
             self.sendGo(command)
-    
         
 def main():
     app = QApplication(sys.argv)
     style = Path(__file__).parent / "style.qss"
     app.setStyleSheet(style.read_text())
     
-    mainApp = MainApp()
+    fig = None
+    if vis is not None:
+        visualizer, shutdown = vis.main(embedded=True)
+        app.aboutToQuit.connect(shutdown)
+        fig = visualizer.fig
+    
+    mainApp = MainApp(guidewire_fig = fig)
     mainApp.start()
     sys.exit(app.exec_())
     
