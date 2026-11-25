@@ -42,6 +42,7 @@ class MainApp(QObject):
         self.controls.modeChanged.connect(lambda mode:self.setMode(mode))
         # self.controls.speedChanged.connect(self.speedChange)
         self.controls.startCommand.connect(self.startButton)
+        self.controls.switchCommand.connect(self.sendSwitch)
         
         # From gamepad to robot
         self.gamepad.drive.connect(self.handleGamepad)
@@ -64,7 +65,7 @@ class MainApp(QObject):
     # Commands
     def sendGo(self, command):
         if command == "release":
-            self.sendReturn()
+            self.sendRelease()
             return
         # mode = self.controls.controlling.value
         if self.mode == ControlMode.CATHETER and command in ROTATE_ACTIONS:
@@ -77,8 +78,11 @@ class MainApp(QObject):
         self.currentAction = None
         self.connection.stop()
             
-    def sendReturn(self):
+    def sendRelease(self):
         self.connection.release()
+        
+    def sendSwitch(self):
+        self.connection.switch()
         
     def speedChange(self, value):
         # if self.currentAction is not None:
