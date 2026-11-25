@@ -203,7 +203,7 @@ def open_csv(path: str):
 
 
 
-def main():
+def main(embedded=False): # If run from UI app, main(True) will return the visualiser
 
 
     stop_event = threading.Event()
@@ -388,16 +388,10 @@ def main():
         target=receiver,
         daemon=True
     )
-    worker.start()
-    # Start the Matplotlib animation
-    visualizer.start()
-    # Create the separate live bending-angle plot
-
-    try:
-        # Display the interactive 3D plot
-        visualizer.show()
-
-    finally:
+    
+    def shutdown(): 
+        # Was in finally, but moved to a function that might be needed elsewhere
+        
         stop_event.set()
         # Interrupt a blocking socket read.
         with socket_lock:
@@ -421,6 +415,21 @@ def main():
                 "_ STOPPED || Saved frames:", state["frames"],
                 "| Bad packets:", state["bad_packets"] )
         angle_calc.close() 
+    
+    worker.start()
+    # Start the Matplotlib animation
+    visualizer.start()
+    # Create the separate live bending-angle plot
+
+    if embedded:
+        return visualizer, shutdown # For access if used by another program
+
+    try:
+        # Display the interactive 3D plot
+        visualizer.show()
+
+    finally:
+        shutdown()
 
     return 0
 
