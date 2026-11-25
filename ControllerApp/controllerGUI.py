@@ -22,6 +22,7 @@ class ControlPanel(QWidget):
     startCommand = pyqtSignal()
     modeChanged = pyqtSignal(object)
     speedChanged = pyqtSignal(int)
+    switchCommand = pyqtSignal()
     
     controlling = ControlMode.GUIDEWIRE
     log_message = pyqtSignal(str) # Current message being sent to logs
@@ -31,14 +32,17 @@ class ControlPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.speed = 0  # Default speed
+        self.started = False
 
         layout = QVBoxLayout(self)
         # Layout going top to bottom
         layout.addWidget(self.speedControl())
         layout.addWidget(self.controlPanel())
         layout.addWidget(self.controlToggle())
+        layout.addWidget(self.controlSwitch())
         self.controlling = ControlMode.GUIDEWIRE
         layout.addStretch()
+        
         
     # Button that toggles between guidewire and catheter
     def controlToggle(self):
@@ -69,6 +73,35 @@ class ControlPanel(QWidget):
             self.findChild(QPushButton, "anti-cw").setEnabled(True)
             self.findChild(QPushButton, "cw").setEnabled(True)
         self.modeChanged.emit(self.controlling)
+
+
+    # Button that switches control between UI and physical controller
+    def controlSwitch(self):
+        box = QGroupBox("Switch Control Method")
+        layout = QVBoxLayout(box)
+
+        self.switch_button = QPushButton("Using Physical Controller")
+        self.switch_button.setCheckable(True)
+        self.switch_button.setMinimumSize(110, 70)
+        self.switch_button.clicked.connect(self.switch)
+        self.switch_button.setEnabled(True)
+        self.switch_button.setStyleSheet("font-weight:bold;")
+        
+        layout.addWidget(self.switch_button)
+        return box
+    
+    def switch(self):
+        if self.switch_button.isChecked():
+            self.switch_button.setText("Using GUI")
+            self.startbutton.setEnabled(True)
+            self.startbutton.setStyleSheet("background:#27ae60; color:white; font-weight:bold;")
+        else:
+            self.stop()
+            self.switch_button.setText("Using Physical Controller")
+            self.startbutton.setEnabled(False)
+            self.startbutton.setStyleSheet("background:#1a1b21; color: #5c5f6b; font-weight:bold;")
+        self.switchCommand.emit()
+    
 
     # Defines the control panel with buttons to control push pull and rotation
     def controlPanel(self):
@@ -102,7 +135,7 @@ class ControlPanel(QWidget):
         # Start button goes in place of estop before its pressed and then estop replaces it after pressed
         self.startbutton = QPushButton("START")
         self.startbutton.setMinimumSize(110, 70)
-        self.startbutton.setStyleSheet("background:#27ae60; color:white; font-weight:bold;")
+        self.startbutton.setStyleSheet("background:#1a1b21; color: #5c5f6b; font-weight:bold;")
         self.startbutton.clicked.connect(self.startButton)
         self.grid.addWidget(self.startbutton, 1, 1) # Start put on ui not stop yet (pyqt5 is weird so this might not have done anything)
         return box
@@ -113,6 +146,7 @@ class ControlPanel(QWidget):
         
         # Call robot stuff here
         self.startCommand.emit()
+        started = True
                 
         # Make all buttons available to be pressed and then replace start button with estop
         self.findChild(QPushButton, "forward").setEnabled(True)
@@ -144,6 +178,7 @@ class ControlPanel(QWidget):
         
         # Call robot stuff here
         self.stopCommand.emit()
+        started = False
         
         # Disable all buttons and put the start button back in place of estop
         self.findChild(QPushButton, "forward").setEnabled(False)
