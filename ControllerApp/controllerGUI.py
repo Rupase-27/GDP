@@ -13,8 +13,8 @@ class ControlMode(Enum):
     
 from guidewirePanel import GuidewirePanel # Make this happen somewhere else later
 try:
-    from Camera_feed import CameraThread      # your file's real module name
-except Exception as e:                          # OpenCV / device_tracker missing, etc.
+    from Camera_feed import CameraThread
+except Exception as e: # Exception found from missing camera, lack of imports, etc
     CameraThread, error = None, e
     
 from datetime import datetime # Same here for logging
@@ -95,6 +95,7 @@ class ControlPanel(QWidget):
         layout.addWidget(self.switch_button)
         return box
     
+    # Enables or disables the start button, and pushes emergency stop if using physical controller
     def switch(self):
         if self.switch_button.isChecked():
             self.switch_button.setText("Using GUI")
@@ -272,11 +273,13 @@ class PlaceholderPanel(QGroupBox):
         self.body.setStyleSheet("color:gray;")
         lay.addWidget(self.body)
 
+# Box to hold the shape sensing
 class LiveShapePanel(QGroupBox):
     def __init__(self, fig, parent=None):
         super().__init__("Guidewire Shape", parent)
         QVBoxLayout(self).addWidget(fig.canvas)
 
+# Grabs the camera thread from Camera_feed if available, and connects to update the frames when needed
 class CameraPanel(QGroupBox):
     def __init__(self, parent=None):
         super().__init__("Camera", parent)
@@ -285,10 +288,11 @@ class CameraPanel(QGroupBox):
         QVBoxLayout(self).addWidget(self.label)
 
         self.thread = None
-        if CameraThread is None:
+        if CameraThread is None: # Including caught errors or no camera
             self.label.setText(f"Camera unavailable: {error}")
             return
         self.thread = CameraThread()
+        # Update the thread as the camera feed updates
         self.thread.frameReady.connect(lambda img: self.label.setPixmap(QPixmap.fromImage(img)))
         self.thread.cameraError.connect(self.label.setText)
         self.thread.start()
@@ -329,6 +333,7 @@ class MainWindow(QMainWindow):
         else:
             self.guidewire_state = GuidewirePanel()
         self.camera_panel = CameraPanel()
+        self.camera_panel.setMaximumSize(1000,400)
 
         right.addWidget(self.camera_panel, 2)
         right.addWidget(self.guidewire_state, 3)
