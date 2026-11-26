@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
 from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtGui import QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QGridLayout,
     QPushButton, QSlider, QLabel, QGroupBox, QButtonGroup, QTextEdit,
@@ -11,7 +12,11 @@ class ControlMode(Enum):
     CATHETER = "catheter"
     
 from guidewirePanel import GuidewirePanel # Make this happen somewhere else later
-
+try:
+    from Camera_feed import CameraThread      # your file's real module name
+except Exception as e:                          # OpenCV / device_tracker missing, etc.
+    CameraThread, error = None, e
+    
 from datetime import datetime # Same here for logging
 
 # Used in left half of controller window
@@ -272,6 +277,26 @@ class LiveShapePanel(QGroupBox):
         super().__init__("Guidewire Shape", parent)
         QVBoxLayout(self).addWidget(fig.canvas)
 
+class CameraPanel(QGroupBox):
+    def __init__(self, parent=None):
+        super().__init__("Camera", parent)
+        self.label = QLabel("No camera")
+        self.label.setAlignment(Qt.AlignCenter)
+        QVBoxLayout(self).addWidget(self.label)
+
+        self.thread = None
+        if CameraThread is None:
+            self.label.setText(f"Camera unavailable: {error}")
+            return
+        self.thread = CameraThread()
+        self.thread.frameReady.connect(lambda img: self.label.setPixmap(QPixmap.fromImage(img)))
+        self.thread.cameraError.connect(self.label.setText)
+        self.thread.start()
+
+    def stop_camera(self):
+        if self.thread:
+            self.thread.stop()
+
 # The actual window that shows up when launched
 class MainWindow(QMainWindow):
     def __init__(self, guidewire_fig=None): # Receives the guidewire visualiser
@@ -303,6 +328,7 @@ class MainWindow(QMainWindow):
             self.guidewire_state = LiveShapePanel(guidewire_fig)
         else:
             self.guidewire_state = GuidewirePanel()
+        self.camera_panel = CameraPanel()
 
         right.addWidget(self.camera_panel, 2)
         right.addWidget(self.guidewire_state, 3)
