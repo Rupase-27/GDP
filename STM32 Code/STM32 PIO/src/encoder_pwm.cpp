@@ -134,8 +134,7 @@
 //  - Initialises the motors and disables the drivers until a start command.
 //  - Initialises the previous encoder angle measurements.
 //  - Inputs: None.
-//  - Updates: Hardware configuration, previous_angle1, previous_angle2,
-//             previous_angle3, motorsEnabled.
+//  - Updates: Hardware configuration, motorsEnabled.
 //
 //  loop()
 //  - Continuously processes UI commands and control source selection.
@@ -187,14 +186,14 @@ using namespace std;
 #define BTN_CW PB12
 #define BTN_CCW PB11
 
-unsigned long previousPrintTime = 0;
-const unsigned long printInterval = 100;
+const unsigned long PRINT_INTERVAL = 100;
+const unsigned long DEBOUNCE_TIME = 50;
+const float MAX_VELOCITY = 0.2f;
+const float SPEED_INCREMENT = 0.01f;
+
+unsigned long previous_print_time = 0;
 
 float CONTROL_VELOCITY = 0.0f;
-
-const float MAX_VELOCITY = 0.2f;
-const unsigned long DEBOUNCE_TIME = 50;
-const float SPEED_INCREMENT = 0.01f;
 
 float target_velocity1 = 0.0f;
 float target_velocity2 = 0.0f;
@@ -206,15 +205,19 @@ float current_angle1 = 0.0f;
 float current_angle2 = 0.0f;
 float current_angle3 = 0.0f;
 
-float previous_angle1 = 0.0f;
-float previous_angle2 = 0.0f;
-float previous_angle3 = 0.0f;
+float startup_rotation = 0.0f;
+
+float min_rotation_limit = 0.0f;
+float max_rotation_limit = 0.0f;
 
 float current_moving_angle = 0.0f;
+float degree_moving_angle = 0.0f;
 
 bool guidewireMode = true;
 bool motorsEnabled = false;
 bool UIController = false;
+bool cwFlag = false;
+bool acwFlag = false;
 
 enum class ControlSource {
     UI,
@@ -531,11 +534,21 @@ void readControls() {
                 break;
 
             case ControlCommand::ROTATE_CW:
-                target_velocity2 = CONTROL_VELOCITY;
+                if (cwFlag) {
+                    target_velocity2 = 0.0f;
+                }
+                else {
+                    target_velocity2 = CONTROL_VELOCITY;
+                }
                 break;
 
             case ControlCommand::ROTATE_ACW:
-                target_velocity2 = -CONTROL_VELOCITY;
+                if(acwFlag) {
+                    target_velocity2 = 0.0f;
+                }
+                else {
+                    target_velocity2 = -CONTROL_VELOCITY;
+                }
                 break;
 
             default:
@@ -567,8 +580,10 @@ void currentAngleUpdate() {
     current_angle2 = sensor2.getAngle();
     current_angle3 = sensor3.getAngle();
 
-    // may need to change to small interval depending on accuracy
-    // may need to change sign based on motor movements in assembly
+    // may have to swap depending on +/- direction
+
+    cwFlag = current_angle2 <= min_rotation_limit;
+    acwFlag = current_angle2 >= max_rotation_limit;
 
     if (target_velocity1 != 0) {
         current_moving_angle = current_angle1 * 180 / PI;
@@ -580,11 +595,11 @@ void currentAngleUpdate() {
         current_moving_angle = current_angle3 * 180 / PI;
     }
 
-    if (current_moving_angle > 360.0f) {
-        current_moving_angle -= 360.0f;
+    if (current_moving_angle < 0) {
+        degree_moving_angle = fmod(current_moving_angle, -360);
     }
-    else if (current_moving_angle < 0.0f) {
-        current_moving_angle += 360.0f;
+    else {
+        degree_moving_angle = fmod(current_moving_angle, 360);
     }
 }
 
@@ -654,11 +669,14 @@ void setup() {
     driver2.disable();
     driver3.disable();
 
-    previous_angle1 = sensor1.getAngle();
-    previous_angle2 = sensor2.getAngle();
-    previous_angle3 = sensor3.getAngle();
-
     motorsEnabled = false;
+
+    startup_rotation = sensor2.getAngle();
+
+    // 30-1 cycloidal drive - this corresponds to resricting guidewire rotation to 360 degrees rotation
+    // +- 180 degrees from startup
+    max_rotation_limit = startup_rotation + (30*PI);
+    min_rotation_limit = startup_rotation - (30*PI);
 
 }
 
@@ -674,9 +692,9 @@ void loop() {
 
     readSpeed();
 
-    readControls();
-
     currentAngleUpdate();
+
+    readControls();
 
     motor1.loopFOC();
     motor2.loopFOC();
@@ -686,10 +704,10 @@ void loop() {
     motor2.move(-target_velocity2);
     motor3.move(target_velocity3);
 
-    if (millis() - previousPrintTime >= printInterval) {
-        previousPrintTime = millis();
+    if (millis() - previous_print_time >= PRINT_INTERVAL) {
+        previous_print_time = millis();
 
         Serial.print("ANGLE ");
-        Serial.print(current_moving_angle, 2);
+        Serial.println(degree_moving_angle, 2);
     }
 }
