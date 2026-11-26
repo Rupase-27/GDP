@@ -571,6 +571,12 @@ void readControls() {
                 break;
         }
     }
+
+    if (Data.control == ControlCommand::RELEASE) {
+        target_velocity1 = 0.0f;
+        target_velocity2 = 0.0f;
+        target_velocity3 = 0.0f;
+    }
 }
 
 void currentAngleUpdate() {
