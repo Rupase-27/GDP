@@ -1,74 +1,154 @@
+////////////////////////////////////////////////////////////////////////////////
 //
 //  OVERVIEW:
-//  This code is designed to control 3 GM3506 motors using a STM32G491RE Nucleo board. 
-//  The motors are controlled using open-loop velocity control in SimpleFOC library
+//  This code controls 3 GM3506 BLDC motors using an STM32G491RE Nucleo board.
+//  The motors operate using open-loop velocity control through the SimpleFOC
+//  library.
 //
-//  NOW the code contains UI integration using the USB - UART communication method already on
-//  the board.
+//  The system supports two operating modes:
+//  - Guidewire mode: Motor 1 controls linear movement and Motor 2 controls rotation.
+//  - Catheter mode: Motor 3 controls linear movement.
 //
-//  The code allows for two modes of operation: guidewire and catheter mode, which can be 
-//  toggled using a switch or through mode selection on the UI. The motors can be enabled or 
-//  disabled using a start button (only for physicla controller), and an emergency stop button 
-//  is provided for safety. The speed of the motors can be adjusted using up and down buttonsor 
-//  through speed selection on the UI.
+//  The motors can be controlled using either physical buttons or a UI connected
+//  through the onboard USB virtual COM port (UART communication).
+//
+//  The physical controller includes movement buttons, speed adjustment buttons,
+//  a mode selection switch, a start button and an emergency stop button.
+//
+//  UI commands are received through serial communication and stored in the
+//  CommandData structure, which is also used for physical controller inputs.
+//
+//  PWM encoder feedback is used to monitor motor angular position and transmit
+//  position information to the UI.
+//
+//
+//  ENUMERATIONS AND STRUCTURES:
+//
+//  ControlSource
+//  - Defines whether commands are received from the UI or physical controller.
+//
+//  OperatingMode
+//  - Defines whether the guidewire or catheter mechanism is selected.
+//
+//  ControlCommand
+//  - Defines the requested motor action, including movement, start, stop
+//    and switching between control sources.
+//
+//  CommandData
+//  - Stores the selected operating mode, control command and UI speed setting.
+//  - Variables: mode, control, speed.
+//
+//
+//  FUNCTIONS:
 //
 //  doPWM1(), doPWM2(), doPWM3()
-//  - Interrupt service routines for handling PWM signals from the encoders
+//  - Interrupt service routines for processing PWM signals from the encoders.
+//  - Each function calls handlePWM() for its corresponding encoder.
+//  - Inputs: None.
+//  - Updates: Internal encoder measurements.
 //
-//  readCommunication()
-//  - Monitors serial communication from UI, reads it into command then sorts inside a struct for
-//    mode (catheter/guidewire), control(PUSH, PULL, ROTATE-CW, ROTATE-ACW), and speed
-//  - Inputs: None
-//  - Updates: Data struct
+//  parseMode()
+//  - Converts a received mode string into the corresponding OperatingMode.
+//  - Inputs: String containing the requested operating mode.
+//  - Returns: OperatingMode::GUIDEWIRE or OperatingMode::CATHETER.
 //
-//  start() 
-//  - Enables the motors when the start button is pressed
-//  - UI - Checks control variable from USB comms
-//  - Inputs: None
-//  - Updates: motorsEnabled
+//  parseControl()
+//  - Converts a received control string into the corresponding ControlCommand.
+//  - Toggles UIController when the SWITCH command is received.
+//  - Inputs: String containing the requested control action.
+//  - Returns: Corresponding ControlCommand enumeration.
+//  - Updates: UIController when switching control sources.
 //
-//  triggerEmergencyStop() 
-//  - Disables all motors and prints "EMERGENCY STOP"
-//  - Inputs: None
-//  - Updates: motorsEnabled
+//  readUICommunication()
+//  - Reads incoming serial data from the UI through the USB virtual COM port.
+//  - Stores received characters until a newline character is detected.
+//  - Separates the received command into source, mode, control and speed.
+//  - Validates the speed value and converts received strings into enumerations.
+//  - Inputs: Serial data from the UI.
+//  - Updates: Data.mode, Data.control, Data.speed.
 //
-//  checkStop() 
-//  - Checks if the emergency stop button is pressed and triggers emergency stop
-//  - UI - Checks control variable from USB comms
-//  - Inputs: None
+//  controlMethod()
+//  - Selects whether the UI or physical controller is used for motor control.
+//  - Processes the SWITCH command to update the active control source.
+//  - Calls readButtonInput() when switching to physical control.
+//  - Inputs: Data.control, UIController.
+//  - Updates: source.
 //
-//  updateMode() 
-//  - Reads the mode toggleswitch and updates the guidewireMode variable
-//  - UI - Reads the mode variable from USB comms and updates the guidewireMode variable
-//  - Inputs: None
-//  - Updates: guidewireMode
+//  readButtonInput()
+//  - Reads the physical controller buttons and mode selection switch.
+//  - Checks the emergency stop and start buttons before movement inputs.
+//  - Converts physical button presses into ControlCommand values.
+//  - Intended to select guidewire or catheter mode using the mode switch.
+//  - Inputs: Physical button and switch states.
+//  - Updates: Data.control.
+//  - Note: The current mode switch code does not update Data.mode.
+//
+//  checkEmergencyStop()
+//  - Checks whether a STOP command has been received.
+//  - Disables all three motor drivers when the motors are enabled.
+//  - Updates the motor enable state and clears the command string.
+//  - Inputs: Data.control, motorsEnabled.
+//  - Updates: motorsEnabled, command.
+//
+//  checkStart()
+//  - Checks whether a START command has been received.
+//  - Enables all three motor drivers if they are currently disabled.
+//  - Inputs: Data.control, motorsEnabled.
+//  - Updates: motorsEnabled.
+//
+//  readSpeed()
+//  - Updates motor velocity using UI or physical controller inputs.
+//  - For UI control, calculates the change in speed from the previous UI value.
+//  - For physical control, detects speed button presses using debounce logic.
+//  - Increases or decreases velocity in increments of SPEED_INCREMENT.
+//  - Limits commanded velocity between 0 and MAX_VELOCITY.
+//  - Inputs: Data.speed, source, UP_SPEED, DOWN_SPEED.
+//  - Updates: CONTROL_VELOCITY, previousUISpeed.
 //
 //  readControls()
-//  - Reads the state of control buttons and updates target velocities for each motor
-//  - UI - Reads the control variable from USB comms and updates velocities for each motor
-//  - Rotation disabled for catheter mode
-//  - Velocity set to 0 when fwd/back or cw/ccw buttons are pressed together
-//  - Inputs: None
-//  - Updates: Target velocities
-//
-//  readSpeedButtons()
-//  - Reads the state of speed control buttons and updates CONTROL_SPEED
-//  - Includes debounce logic with edge detection and time constraints to prevent multiple 
-//    increments/decrements from a single press
-//  - UI - Reads the int speed from USB comms and updates CONTROL_SPEED
-//  - UI - Calculates the number of SPEED_INCREMENTS from user changing to preset value and
-//         'jumps' to the corresponding CONTROL_SPEED
-//  - Inputs: None
-//  - Updates: CONTROL_SPEED
+//  - Determines the target velocities of the motors based on the selected
+//    operating mode and requested control command.
+//  - In guidewire mode, Motor 1 controls linear movement and Motor 2 rotation.
+//  - In catheter mode, Motor 3 controls linear movement.
+//  - Positive and negative velocities determine the movement direction.
+//  - Inputs: Data.mode, Data.control, CONTROL_VELOCITY, motorsEnabled.
+//  - Updates: target_velocity1, target_velocity2, target_velocity3.
+//  - Note: Target velocities are not currently reset on RELEASE.
 //
 //  currentAngleUpdate()
-//  - Updates the global angle variable of working motor based on encoder readings
-//  - Can be used in UI to show angle or later diatnce moved
-//  - Inputs: None
-//  - Updates: current_moving_angle
+//  - Updates the angular position measurements from all three encoders.
+//  - Selects the angle of the motor currently commanded to move.
+//  - Converts the selected motor angle from radians to degrees.
+//  - Attempts to constrain the displayed angle between 0 and 360 degrees.
+//  - The angle can be transmitted to the UI or used to calculate displacement.
+//  - Inputs: Encoder measurements, target motor velocities.
+//  - Updates: current_angle1, current_angle2, current_angle3,
+//             current_moving_angle.
+//
+//  setup()
+//  - Initialises serial communication and configures physical controller inputs.
+//  - Initialises the three PWM encoders and enables their interrupts.
+//  - Configures the motor drivers with supply voltage and voltage limits.
+//  - Links each motor to its corresponding driver.
+//  - Configures all motors for open-loop velocity control.
+//  - Initialises the motors and disables the drivers until a start command.
+//  - Initialises the previous encoder angle measurements.
+//  - Inputs: None.
+//  - Updates: Hardware configuration, previous_angle1, previous_angle2,
+//             previous_angle3, motorsEnabled.
+//
+//  loop()
+//  - Continuously processes UI commands and control source selection.
+//  - Checks emergency stop and start commands.
+//  - Updates motor speed and target velocities.
+//  - Reads encoder measurements and updates the current moving angle.
+//  - Executes SimpleFOC motor control functions.
+//  - Applies the target velocities to all three motors.
+//  - Transmits the current moving angle to the UI every 100 ms.
+//  - Inputs: UI commands, physical controller inputs, encoder measurements.
+//  - Updates: Motor outputs, control variables, serial output.
 //
 ////////////////////////////////////////////////////////////////////////////////
-
 
 
 #include <Arduino.h>
@@ -157,7 +237,7 @@ enum class ControlCommand {
     SWITCH
 };
 
-ControlSource source;
+ControlSource source= ControlSource::BUTTON;
 
 struct CommandData {
     OperatingMode mode;
