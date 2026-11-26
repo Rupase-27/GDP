@@ -1,74 +1,155 @@
+////////////////////////////////////////////////////////////////////////////////
 //
 //  OVERVIEW:
-//  This code is designed to control 3 GM3506 motors using a STM32G491RE Nucleo board. 
-//  The motors are controlled using open-loop velocity control in SimpleFOC library
+//  This code controls 3 GM3506 BLDC motors using an STM32G491RE Nucleo board.
+//  The motors operate using open-loop velocity control through the SimpleFOC
+//  library.
 //
-//  NOW the code contains UI integration using the USB - UART communication method already on
-//  the board.
+//  The system supports two operating modes:
+//  - Guidewire mode: Motor 1 controls linear movement and Motor 2 controls rotation.
+//  - Catheter mode: Motor 3 controls linear movement.
 //
-//  The code allows for two modes of operation: guidewire and catheter mode, which can be 
-//  toggled using a switch or through mode selection on the UI. The motors can be enabled or 
-//  disabled using a start button (only for physicla controller), and an emergency stop button 
-//  is provided for safety. The speed of the motors can be adjusted using up and down buttonsor 
-//  through speed selection on the UI.
+//  The motors can be controlled using either physical buttons or a UI connected
+//  through the onboard USB virtual COM port (UART communication).
+//
+//  The physical controller includes movement buttons, speed adjustment buttons,
+//  a mode selection switch, a start button and an emergency stop button.
+//
+//  UI commands are received through serial communication and stored in the
+//  CommandData structure, which is also used for physical controller inputs.
+//
+//  PWM encoder feedback is used to monitor motor angular position and transmit
+//  position information to the UI.
+//
+//
+//  ENUMERATIONS AND STRUCTURES:
+//
+//  ControlSource
+//  - Defines whether commands are received from the UI or physical controller.
+//
+//  OperatingMode
+//  - Defines whether the guidewire or catheter mechanism is selected.
+//
+//  ControlCommand
+//  - Defines the requested motor action, including movement, start, stop
+//    and switching between control sources.
+//
+//  CommandData
+//  - Stores the selected operating mode, control command and UI speed setting.
+//  - Variables: mode, control, speed.
+//
+//
+//  FUNCTIONS:
 //
 //  doPWM1(), doPWM2(), doPWM3()
-//  - Interrupt service routines for handling PWM signals from the encoders
+//  - Interrupt service routines for processing PWM signals from the encoders.
+//  - Each function calls handlePWM() for its corresponding encoder.
+//  - Inputs: None.
+//  - Updates: Internal encoder measurements.
 //
-//  readCommunication()
-//  - Monitors serial communication from UI, reads it into command then sorts inside a struct for
-//    mode (catheter/guidewire), control(PUSH, PULL, ROTATE-CW, ROTATE-ACW), and speed
-//  - Inputs: None
-//  - Updates: Data struct
+//  parseMode()
+//  - Converts a received mode string into the corresponding OperatingMode.
+//  - Inputs: String containing the requested operating mode.
+//  - Returns: OperatingMode::GUIDEWIRE or OperatingMode::CATHETER.
 //
-//  start() 
-//  - Enables the motors when the start button is pressed
-//  - UI - Checks control variable from USB comms
-//  - Inputs: None
-//  - Updates: motorsEnabled
+//  parseControl()
+//  - Converts a received control string into the corresponding ControlCommand.
+//  - Toggles UIController when the SWITCH command is received.
+//  - Inputs: String containing the requested control action.
+//  - Returns: Corresponding ControlCommand enumeration.
+//  - Updates: UIController when switching control sources.
 //
-//  triggerEmergencyStop() 
-//  - Disables all motors and prints "EMERGENCY STOP"
-//  - Inputs: None
-//  - Updates: motorsEnabled
+//  readUICommunication()
+//  - Reads incoming serial data from the UI through the USB virtual COM port.
+//  - Stores received characters until a newline character is detected.
+//  - Separates the received command into source, mode, control and speed.
+//  - Validates the speed value and converts received strings into enumerations.
+//  - Inputs: Serial data from the UI.
+//  - Updates: Data.mode, Data.control, Data.speed.
 //
-//  checkStop() 
-//  - Checks if the emergency stop button is pressed and triggers emergency stop
-//  - UI - Checks control variable from USB comms
-//  - Inputs: None
+//  controlMethod()
+//  - Selects whether the UI or physical controller is used for motor control.
+//  - Processes the SWITCH command to update the active control source.
+//  - Calls readButtonInput() when switching to physical control.
+//  - Inputs: Data.control, UIController.
+//  - Updates: source.
 //
-//  updateMode() 
-//  - Reads the mode toggleswitch and updates the guidewireMode variable
-//  - UI - Reads the mode variable from USB comms and updates the guidewireMode variable
-//  - Inputs: None
-//  - Updates: guidewireMode
+//  readButtonInput()
+//  - Reads the physical controller buttons and mode selection switch.
+//  - Checks the emergency stop and start buttons before movement inputs.
+//  - Converts physical button presses into ControlCommand values.
+//  - Intended to select guidewire or catheter mode using the mode switch.
+//  - Inputs: Physical button and switch states.
+//  - Updates: Data.control.
+//  - Note: The current mode switch code does not update Data.mode.
+//
+//  checkEmergencyStop()
+//  - Checks whether a STOP command has been received.
+//  - Disables all three motor drivers when the motors are enabled.
+//  - Updates the motor enable state and clears the command string.
+//  - Inputs: Data.control, motorsEnabled.
+//  - Updates: motorsEnabled, command.
+//
+//  checkStart()
+//  - Checks whether a START command has been received.
+//  - Enables all three motor drivers if they are currently disabled.
+//  - Inputs: Data.control, motorsEnabled.
+//  - Updates: motorsEnabled.
+//
+//  readSpeed()
+//  - Updates motor velocity using UI or physical controller inputs.
+//  - For UI control, calculates the change in speed from the previous UI value.
+//  - For physical control, detects speed button presses using debounce logic.
+//  - Increases or decreases velocity in increments of SPEED_INCREMENT.
+//  - Limits commanded velocity between 0 and MAX_VELOCITY.
+//  - Inputs: Data.speed, source, UP_SPEED, DOWN_SPEED.
+//  - Updates: CONTROL_VELOCITY, previousUISpeed.
 //
 //  readControls()
-//  - Reads the state of control buttons and updates target velocities for each motor
-//  - UI - Reads the control variable from USB comms and updates velocities for each motor
-//  - Rotation disabled for catheter mode
-//  - Velocity set to 0 when fwd/back or cw/ccw buttons are pressed together
-//  - Inputs: None
-//  - Updates: Target velocities
-//
-//  readSpeedButtons()
-//  - Reads the state of speed control buttons and updates CONTROL_SPEED
-//  - Includes debounce logic with edge detection and time constraints to prevent multiple 
-//    increments/decrements from a single press
-//  - UI - Reads the int speed from USB comms and updates CONTROL_SPEED
-//  - UI - Calculates the number of SPEED_INCREMENTS from user changing to preset value and
-//         'jumps' to the corresponding CONTROL_SPEED
-//  - Inputs: None
-//  - Updates: CONTROL_SPEED
+//  - Determines the target velocities of the motors based on the selected
+//    operating mode and requested control command.
+//  - In guidewire mode, Motor 1 controls linear movement and Motor 2 rotation.
+//  - Motor 2 movements restricted based on cw and acw rotation flags.
+//  - In catheter mode, Motor 3 controls linear movement.
+//  - Positive and negative velocities determine the movement direction.
+//  - Inputs: Data.mode, Data.control, CONTROL_VELOCITY, motorsEnabled.
+//  - Updates: target_velocity1, target_velocity2, target_velocity3.
+//  - Note: Target velocities are not currently reset on RELEASE.
 //
 //  currentAngleUpdate()
-//  - Updates the global angle variable of working motor based on encoder readings
-//  - Can be used in UI to show angle or later diatnce moved
-//  - Inputs: None
-//  - Updates: current_moving_angle
+//  - Updates the angular position measurements from all three encoders.
+//  - Selects the angle of the motor currently commanded to move.
+//  - IF angle of guidewire rotation exceeds +/- 180 degrees from start flags to controller and UI.
+//  - Converts the selected motor angle from radians to degrees.
+//  - Constrain the displayed angle between 0 and 360 degrees.
+//  - The degree angle transmitted to the UI or current angle used to calculate displacement.
+//  - Inputs: Encoder measurements, target motor velocities.
+//  - Updates: current_angle1, current_angle2, current_angle3,
+//             current_moving_angle, degree_moving_angle, cwFlag, acwFlag.
+//
+//  setup()
+//  - Initialises serial communication and configures physical controller inputs.
+//  - Initialises the three PWM encoders and enables their interrupts.
+//  - Configures the motor drivers with supply voltage and voltage limits.
+//  - Links each motor to its corresponding driver.
+//  - Configures all motors for open-loop velocity control.
+//  - Initialises the motors and disables the drivers until a start command.
+//  - Read startup angle of encoder for rotation and calculates limits from this.
+//  - Inputs: None.
+//  - Updates: Hardware configuration, motorsEnabled.
+//
+//  loop()
+//  - Continuously processes UI commands and control source selection.
+//  - Checks emergency stop and start commands.
+//  - Updates motor speed and target velocities.
+//  - Reads encoder measurements and updates the current moving angle.
+//  - Executes SimpleFOC motor control functions.
+//  - Applies the target velocities to all three motors.
+//  - Transmits the current moving angle to the UI every 100 ms.
+//  - Inputs: UI commands, physical controller inputs, encoder measurements.
+//  - Updates: Motor outputs, control variables, serial output.
 //
 ////////////////////////////////////////////////////////////////////////////////
-
 
 
 #include <Arduino.h>
@@ -95,9 +176,9 @@ using namespace std;
 #define IN3_3 PC9
 #define DRIVER3_EN PB5
 
-#define ESTOP PC4
+#define BTN_STOP PC4
 #define MODE_SWITCH PB13
-#define START PB14
+#define BTN_START PB14
 
 #define UP_SPEED PB15
 #define DOWN_SPEED PB1
@@ -107,14 +188,14 @@ using namespace std;
 #define BTN_CW PB12
 #define BTN_CCW PB11
 
-unsigned long previousPrintTime = 0;
-const unsigned long printInterval = 100;
+const unsigned long PRINT_INTERVAL = 100;
+const unsigned long DEBOUNCE_TIME = 50;
+const float MAX_VELOCITY = 0.2f;
+const float SPEED_INCREMENT = 0.01f;
+
+unsigned long previous_print_time = 0;
 
 float CONTROL_VELOCITY = 0.0f;
-
-const float MAX_VELOCITY = 0.2f;
-const unsigned long DEBOUNCE_TIME = 50;
-const float SPEED_INCREMENT = 0.01f;
 
 float target_velocity1 = 0.0f;
 float target_velocity2 = 0.0f;
@@ -126,24 +207,54 @@ float current_angle1 = 0.0f;
 float current_angle2 = 0.0f;
 float current_angle3 = 0.0f;
 
-float previous_angle1 = 0.0f;
-float previous_angle2 = 0.0f;
-float previous_angle3 = 0.0f;
+float startup_rotation = 0.0f;
+
+float min_rotation_limit = 0.0f;
+float max_rotation_limit = 0.0f;
 
 float current_moving_angle = 0.0f;
+float degree_moving_angle = 0.0f;
 
 bool guidewireMode = true;
-bool UIControl = true;
 bool motorsEnabled = false;
+bool UIController = false;
+bool cwFlag = false;
+bool acwFlag = false;
+
+enum class ControlSource {
+    UI,
+    BUTTON
+};
+
+enum class OperatingMode {
+    GUIDEWIRE,
+    CATHETER
+};
+
+enum class ControlCommand {
+    RELEASE,
+    START,
+    STOP,
+    PUSH,
+    PULL,
+    ROTATE_CW,
+    ROTATE_ACW,
+    SWITCH
+};
+
+ControlSource source= ControlSource::BUTTON;
 
 struct CommandData {
-    string x;
-    string mode;
-    string control;
+    OperatingMode mode;
+    ControlCommand control;
     int speed;
 };
 
-CommandData Data;
+CommandData Data = {
+    OperatingMode::GUIDEWIRE,
+    ControlCommand::RELEASE,
+    0
+};
 
 string command;
 string receivedMessage;
@@ -173,31 +284,76 @@ void doPWM3() {
     sensor3.handlePWM();
 }
 
-void readCommunication() {
-    while (Serial.available() > 0)
-    {
+OperatingMode parseMode(const string& value) {
+    if (value == "catheter") {
+        return OperatingMode::CATHETER;
+    }
+
+    return OperatingMode::GUIDEWIRE;
+}
+
+ControlCommand parseControl(const string& value) {
+    if (value == "START") {
+        return ControlCommand::START;
+    }
+    else if (value == "STOP") {
+        return ControlCommand::STOP;
+    }
+    else if (value == "PUSH") {
+        return ControlCommand::PUSH;
+    }
+    else if (value == "PULL") {
+        return ControlCommand::PULL;
+    }
+    else if (value == "ROTATE-CW") {
+        return ControlCommand::ROTATE_CW;
+    }
+    else if (value == "ROTATE-ACW") {
+        return ControlCommand::ROTATE_ACW;
+    }
+    else if (value == "SWITCH"){
+        // switching between control and ui
+        UIController = ~UIController;
+        return ControlCommand::SWITCH;
+    }
+
+    return ControlCommand::RELEASE;
+}
+
+void readUICommunication() {
+    while (Serial.available() > 0) {
         char receivedChar = Serial.read();
 
-        if (receivedChar == '\r'){
+        if (receivedChar == '\r') {
             continue;
         }
 
-        if (receivedChar == '\n'){
+        if (receivedChar == '\n') {
             command = receivedMessage;
             receivedMessage.clear();
 
             size_t pos1 = command.find(' ');
             size_t pos2 = command.find(' ', pos1 + 1);
+            size_t pos3 = command.find(' ', pos2 + 1);
 
-            if (pos1 != string::npos && pos2 != string::npos){
-                Data.mode = command.substr(0, pos1);
-                Data.control = command.substr(pos1 + 1, pos2 - pos1 - 1);
+            if (pos1 != string::npos &&
+                pos2 != string::npos &&
+                pos3 != string::npos) {
 
-                char speedCharacter = command[pos2 + 1];
+                string sourceString =
+                    command.substr(0, pos1);
 
-                if (speedCharacter >= '0' && speedCharacter <= '9'){
-                    Data.speed = speedCharacter - '0';
+                string modeString = command.substr(pos1 + 1, pos2 - pos1 - 1);
+                string controlString = command.substr(pos2 + 1, pos3 - pos2 - 1);
+                string speedString = command.substr(pos3 + 1);
 
+                if (speedString.length() == 1 &&
+                    speedString[0] >= '0' &&
+                    speedString[0] <= '9') {
+
+                    Data.mode = parseMode(modeString);
+                    Data.control = parseControl(controlString);
+                    Data.speed = speedString[0] - '0';
                 }
                 else {
                     Serial.println("Invalid speed");
@@ -216,76 +372,78 @@ void readCommunication() {
 }
 
 void controlMethod() {
-    if (Data.x == "UI") {
-        UIControl = true;
-    }
-    else if (Data.x == "BUTTON") {
-        UIControl = false;
+    if (Data.control == ControlCommand::SWITCH) {
+        if (UIController){
+            source = ControlSource::UI;
+        }
+        else {
+            source = ControlSource::BUTTON;
+            readButtonInput();
+        }
     }
 }
 
-void start() {
-    if (UIControl) {
-        if (!motorsEnabled && Data.control == "START") {
-            driver1.enable();
-            driver2.enable();
-            driver3.enable();
+void readButtonInput() {
 
-            motorsEnabled = true;
-            command.clear();
-        }
+    if (digitalRead(BTN_STOP) == LOW) {
+        Data.control = ControlCommand::STOP;
+        return;
+    }
+
+    if (!motorsEnabled && digitalRead(BTN_START) == LOW) {
+        Data.control = ControlCommand::START;
+        return;
+    }
+
+    // only going to be used when controller inputs read from i.e control method BUTTONS
+    if (digitalRead(MODE_SWITCH) == HIGH){
+        OperatingMode::CATHETER;
+    }   
+    else {
+        OperatingMode::GUIDEWIRE;
+    }
+
+    if (!digitalRead(BTN_FORWARD) && digitalRead(BTN_BACK)) {
+        Data.control = ControlCommand::PUSH;
+    }
+    else if (!digitalRead(BTN_BACK) && digitalRead(BTN_FORWARD)) {
+        Data.control = ControlCommand::PULL;
+    }
+    else if (!digitalRead(BTN_CW) && digitalRead(BTN_CCW)) {
+        Data.control = ControlCommand::ROTATE_CW;
+    }
+    else if (!digitalRead(BTN_CCW) && digitalRead(BTN_CW)) {
+        Data.control = ControlCommand::ROTATE_ACW;
     }
     else {
-        if (!motorsEnabled && (digitalRead(START) == LOW)) {
-            driver1.enable();
-            driver2.enable();
-            driver3.enable();
-
-            motorsEnabled = true;
-            command.clear();
-        }
+        Data.control = ControlCommand::RELEASE;
     }
-}
-
-void triggerEmergencyStop() {
-    driver1.disable();
-    driver2.disable();
-    driver3.disable();
-
-    motorsEnabled = false;
-
-    Serial.println("ESTOP_TRIGGERED");
     
-    command.clear();
-    start();
 }
 
-void checkStop(){
-    if (digitalRead(ESTOP) == LOW || command == "STOP") {
-        triggerEmergencyStop();
+void checkEmergencyStop() {
+    if (motorsEnabled && (Data.control == ControlCommand::STOP)) {
+        driver1.disable();
+        driver2.disable();
+        driver3.disable();
+
+        motorsEnabled = false;
+        
+        command.clear();
     }
 }
 
-void updateMode() {
-    if (UIControl) {
-        if (command == "guidewire") {
-            guidewireMode = true;
-        }
-        else if (command == "catheter") {
-            guidewireMode = false;
-        }
-    }
-    else {
-        if (digitalRead(MODE_SWITCH) == LOW) {
-            guidewireMode = true;
-        }
-        else if (digitalRead(MODE_SWITCH) == HIGH) {
-            guidewireMode = false;
-        }
+void checkStart() {
+    if (!motorsEnabled && (Data.control == ControlCommand::START)){
+        driver1.enable();
+        driver2.enable();
+        driver3.enable();
+
+        motorsEnabled = true;
     }
 }
 
-void readSpeedButtons() {
+void readSpeed() {
     static bool lastUpReading = HIGH;
     static bool lastDownReading = HIGH;
 
@@ -300,28 +458,20 @@ void readSpeedButtons() {
     bool upRead = digitalRead(UP_SPEED);
     bool downRead = digitalRead(DOWN_SPEED);
 
-    if (UIControl){
+    if (source == ControlSource::UI ){
         int speedChange = Data.speed - previousUISpeed;
 
-        if (Data.speed > previousUISpeed){
-            CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
+        CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
 
-            if (CONTROL_VELOCITY > 5.0f) {
-                CONTROL_VELOCITY = 5.0f;
-            }
-
-            previousUISpeed = Data.speed;
+        if (CONTROL_VELOCITY > MAX_VELOCITY) {
+            CONTROL_VELOCITY = MAX_VELOCITY;
         }
-        else if (Data.speed < previousUISpeed){
 
-            CONTROL_VELOCITY -= speedChange * SPEED_INCREMENT;
-
-            if (CONTROL_VELOCITY < 0.0f) {
-                CONTROL_VELOCITY = 0.0f;
-            }
-
-            previousUISpeed = Data.speed;
+        if (CONTROL_VELOCITY < 0.0f) {
+            CONTROL_VELOCITY = 0.0f;
         }
+
+        previousUISpeed = Data.speed;
     }
     else {
         if (upRead != lastUpReading) {
@@ -369,73 +519,63 @@ void readSpeedButtons() {
     }
 }
 
-void readControls(){
-    target_velocity1 = 0.0f;
-    target_velocity2 = 0.0f;
-    target_velocity3 = 0.0f;
+void readControls() {
 
-    if (UIControl){
-        if (guidewireMode)
-        {
-            if (Data.control == "PUSH"){
+    if (!motorsEnabled) {
+        return;
+    }
+
+    if (Data.mode == OperatingMode::GUIDEWIRE) {
+        switch (Data.control) {
+            case ControlCommand::PUSH:
                 target_velocity1 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "PULL"){
-                target_velocity1 = -CONTROL_VELOCITY;
-            }
+                break;
 
-            if (Data.control == "ROTATE-CW"){
-                target_velocity2 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "ROTATE-ACW"){
-                target_velocity2 = -CONTROL_VELOCITY;
-            }
-        }
-        else
-        {
-            if (Data.control == "PUSH"){
-                target_velocity3 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "PULL"){
-                target_velocity3 = -CONTROL_VELOCITY;
-            }
+            case ControlCommand::PULL:
+                target_velocity1 = -CONTROL_VELOCITY;
+                break;
+
+            case ControlCommand::ROTATE_CW:
+                if (cwFlag) {
+                    target_velocity2 = 0.0f;
+                }
+                else {
+                    target_velocity2 = CONTROL_VELOCITY;
+                }
+                break;
+
+            case ControlCommand::ROTATE_ACW:
+                if(acwFlag) {
+                    target_velocity2 = 0.0f;
+                }
+                else {
+                    target_velocity2 = -CONTROL_VELOCITY;
+                }
+                break;
+
+            default:
+                break;
         }
     }
     else {
-        if (guidewireMode)
-        {
-            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
-                target_velocity1 = 0.0f;
-            }
-            else if (!digitalRead(BTN_FORWARD)){
-                target_velocity1 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_BACK)){
-                target_velocity1 = -CONTROL_VELOCITY;
-            }
-
-            if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW)){
-                target_velocity2 = 0.0f;
-            }
-            else if (!digitalRead(BTN_CW)){
-                target_velocity2 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_CCW)){
-                target_velocity2 = -CONTROL_VELOCITY;
-            }
-        }
-        else
-        {
-            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
-                target_velocity3 = 0.0f;
-            }
-            else if (!digitalRead(BTN_FORWARD)){
+        switch (Data.control) {
+            case ControlCommand::PUSH:
                 target_velocity3 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_BACK)){
+                break;
+
+            case ControlCommand::PULL:
                 target_velocity3 = -CONTROL_VELOCITY;
-            }
+                break;
+
+            default:
+                break;
         }
+    }
+
+    if (Data.control == ControlCommand::RELEASE) {
+        target_velocity1 = 0.0f;
+        target_velocity2 = 0.0f;
+        target_velocity3 = 0.0f;
     }
 }
 
@@ -448,8 +588,12 @@ void currentAngleUpdate() {
     current_angle2 = sensor2.getAngle();
     current_angle3 = sensor3.getAngle();
 
-    // may need to change to small interval depending on accuracy
-    // may need to change sign based on motor movements in assembly
+    // may have to swap depending on +/- direction
+
+    cwFlag = current_angle2 <= min_rotation_limit;
+    acwFlag = current_angle2 >= max_rotation_limit;
+
+    // current_moving_angle kept as un constrained variable in case we want to use it for distance later
 
     if (target_velocity1 != 0) {
         current_moving_angle = current_angle1 * 180 / PI;
@@ -461,11 +605,14 @@ void currentAngleUpdate() {
         current_moving_angle = current_angle3 * 180 / PI;
     }
 
-    if (current_moving_angle > 360.0f) {
-        current_moving_angle -= 360.0f;
+    // degree_moving_angle used to send back to user as easier to read
+    // fmod() returns remainder 
+
+    if (current_moving_angle < 0) {
+        degree_moving_angle = fmod(current_moving_angle, -360);
     }
-    else if (current_moving_angle < 0.0f) {
-        current_moving_angle += 360.0f;
+    else {
+        degree_moving_angle = fmod(current_moving_angle, 360);
     }
 }
 
@@ -473,9 +620,9 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    pinMode(ESTOP, INPUT_PULLUP);
+    pinMode(BTN_STOP, INPUT_PULLUP);
     pinMode(MODE_SWITCH, INPUT_PULLUP);
-    pinMode(START, INPUT_PULLUP);
+    pinMode(BTN_START, INPUT_PULLUP);
 
     pinMode(UP_SPEED, INPUT_PULLUP);
     pinMode(DOWN_SPEED, INPUT_PULLUP);
@@ -535,24 +682,32 @@ void setup() {
     driver2.disable();
     driver3.disable();
 
-    previous_angle1 = sensor1.getAngle();
-    previous_angle2 = sensor2.getAngle();
-    previous_angle3 = sensor3.getAngle();
-
     motorsEnabled = false;
+
+    startup_rotation = sensor2.getAngle();
+
+    // 30-1 cycloidal drive - this corresponds to resricting guidewire rotation to 360 degrees rotation
+    // +- 180 degrees from startup
+    max_rotation_limit = startup_rotation + (30*PI);
+    min_rotation_limit = startup_rotation - (30*PI);
 
 }
 
 void loop() {
     
-    readCommunication();
+    readUICommunication();
+
     controlMethod();
-    start();
-    checkStop();
-    updateMode();
-    readSpeedButtons();
-    readControls();
+
+    checkEmergencyStop();
+
+    checkStart();
+
+    readSpeed();
+
     currentAngleUpdate();
+
+    readControls();
 
     motor1.loopFOC();
     motor2.loopFOC();
@@ -562,10 +717,10 @@ void loop() {
     motor2.move(-target_velocity2);
     motor3.move(target_velocity3);
 
-    if (millis() - previousPrintTime >= printInterval) {
-        previousPrintTime = millis();
+    if (millis() - previous_print_time >= PRINT_INTERVAL) {
+        previous_print_time = millis();
 
         Serial.print("ANGLE ");
-        Serial.print(current_moving_angle, 2);
+        Serial.println(degree_moving_angle, 2);
     }
 }
