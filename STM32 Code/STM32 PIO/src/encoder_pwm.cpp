@@ -95,9 +95,9 @@ using namespace std;
 #define IN3_3 PC9
 #define DRIVER3_EN PB5
 
-#define ESTOP PC4
+#define BTN_STOP PC4
 #define MODE_SWITCH PB13
-#define START PB14
+#define BTN_START PB14
 
 #define UP_SPEED PB15
 #define DOWN_SPEED PB1
@@ -133,17 +133,43 @@ float previous_angle3 = 0.0f;
 float current_moving_angle = 0.0f;
 
 bool guidewireMode = true;
-bool UIControl = true;
 bool motorsEnabled = false;
+bool UIController = false;
+
+enum class ControlSource {
+    UI,
+    BUTTON
+};
+
+enum class OperatingMode {
+    GUIDEWIRE,
+    CATHETER
+};
+
+enum class ControlCommand {
+    RELEASE,
+    START,
+    STOP,
+    PUSH,
+    PULL,
+    ROTATE_CW,
+    ROTATE_ACW,
+    SWITCH
+};
+
+ControlSource source;
 
 struct CommandData {
-    string x;
-    string mode;
-    string control;
+    OperatingMode mode;
+    ControlCommand control;
     int speed;
 };
 
-CommandData Data;
+CommandData Data = {
+    OperatingMode::GUIDEWIRE,
+    ControlCommand::RELEASE,
+    0
+};
 
 string command;
 string receivedMessage;
@@ -173,31 +199,76 @@ void doPWM3() {
     sensor3.handlePWM();
 }
 
-void readCommunication() {
-    while (Serial.available() > 0)
-    {
+OperatingMode parseMode(const string& value) {
+    if (value == "catheter") {
+        return OperatingMode::CATHETER;
+    }
+
+    return OperatingMode::GUIDEWIRE;
+}
+
+ControlCommand parseControl(const string& value) {
+    if (value == "START") {
+        return ControlCommand::START;
+    }
+    else if (value == "STOP") {
+        return ControlCommand::STOP;
+    }
+    else if (value == "PUSH") {
+        return ControlCommand::PUSH;
+    }
+    else if (value == "PULL") {
+        return ControlCommand::PULL;
+    }
+    else if (value == "ROTATE-CW") {
+        return ControlCommand::ROTATE_CW;
+    }
+    else if (value == "ROTATE-ACW") {
+        return ControlCommand::ROTATE_ACW;
+    }
+    else if (value == "SWITCH"){
+        // switching between control and ui
+        UIController = ~UIController;
+        return ControlCommand::SWITCH;
+    }
+
+    return ControlCommand::RELEASE;
+}
+
+void readUICommunication() {
+    while (Serial.available() > 0) {
         char receivedChar = Serial.read();
 
-        if (receivedChar == '\r'){
+        if (receivedChar == '\r') {
             continue;
         }
 
-        if (receivedChar == '\n'){
+        if (receivedChar == '\n') {
             command = receivedMessage;
             receivedMessage.clear();
 
             size_t pos1 = command.find(' ');
             size_t pos2 = command.find(' ', pos1 + 1);
+            size_t pos3 = command.find(' ', pos2 + 1);
 
-            if (pos1 != string::npos && pos2 != string::npos){
-                Data.mode = command.substr(0, pos1);
-                Data.control = command.substr(pos1 + 1, pos2 - pos1 - 1);
+            if (pos1 != string::npos &&
+                pos2 != string::npos &&
+                pos3 != string::npos) {
 
-                char speedCharacter = command[pos2 + 1];
+                string sourceString =
+                    command.substr(0, pos1);
 
-                if (speedCharacter >= '0' && speedCharacter <= '9'){
-                    Data.speed = speedCharacter - '0';
+                string modeString = command.substr(pos1 + 1, pos2 - pos1 - 1);
+                string controlString = command.substr(pos2 + 1, pos3 - pos2 - 1);
+                string speedString = command.substr(pos3 + 1);
 
+                if (speedString.length() == 1 &&
+                    speedString[0] >= '0' &&
+                    speedString[0] <= '9') {
+
+                    Data.mode = parseMode(modeString);
+                    Data.control = parseControl(controlString);
+                    Data.speed = speedString[0] - '0';
                 }
                 else {
                     Serial.println("Invalid speed");
@@ -216,76 +287,78 @@ void readCommunication() {
 }
 
 void controlMethod() {
-    if (Data.x == "UI") {
-        UIControl = true;
-    }
-    else if (Data.x == "BUTTON") {
-        UIControl = false;
+    if (Data.control == ControlCommand::SWITCH) {
+        if (UIController){
+            source = ControlSource::UI;
+        }
+        else {
+            source = ControlSource::BUTTON;
+            readButtonInput();
+        }
     }
 }
 
-void start() {
-    if (UIControl) {
-        if (!motorsEnabled && Data.control == "START") {
-            driver1.enable();
-            driver2.enable();
-            driver3.enable();
+void readButtonInput() {
 
-            motorsEnabled = true;
-            command.clear();
-        }
+    if (digitalRead(BTN_STOP) == LOW) {
+        Data.control = ControlCommand::STOP;
+        return;
+    }
+
+    if (!motorsEnabled && digitalRead(BTN_START) == LOW) {
+        Data.control = ControlCommand::START;
+        return;
+    }
+
+    // only going to be used when controller inputs read from i.e control method BUTTONS
+    if (digitalRead(MODE_SWITCH) == HIGH){
+        OperatingMode::CATHETER;
+    }   
+    else {
+        OperatingMode::GUIDEWIRE;
+    }
+
+    if (!digitalRead(BTN_FORWARD) && digitalRead(BTN_BACK)) {
+        Data.control = ControlCommand::PUSH;
+    }
+    else if (!digitalRead(BTN_BACK) && digitalRead(BTN_FORWARD)) {
+        Data.control = ControlCommand::PULL;
+    }
+    else if (!digitalRead(BTN_CW) && digitalRead(BTN_CCW)) {
+        Data.control = ControlCommand::ROTATE_CW;
+    }
+    else if (!digitalRead(BTN_CCW) && digitalRead(BTN_CW)) {
+        Data.control = ControlCommand::ROTATE_ACW;
     }
     else {
-        if (!motorsEnabled && (digitalRead(START) == LOW)) {
-            driver1.enable();
-            driver2.enable();
-            driver3.enable();
-
-            motorsEnabled = true;
-            command.clear();
-        }
+        Data.control = ControlCommand::RELEASE;
     }
-}
-
-void triggerEmergencyStop() {
-    driver1.disable();
-    driver2.disable();
-    driver3.disable();
-
-    motorsEnabled = false;
-
-    Serial.println("ESTOP_TRIGGERED");
     
-    command.clear();
-    start();
 }
 
-void checkStop(){
-    if (digitalRead(ESTOP) == LOW || command == "STOP") {
-        triggerEmergencyStop();
+void checkEmergencyStop() {
+    if (motorsEnabled && (Data.control == ControlCommand::STOP)) {
+        driver1.disable();
+        driver2.disable();
+        driver3.disable();
+
+        motorsEnabled = false;
+        
+        command.clear();
     }
 }
 
-void updateMode() {
-    if (UIControl) {
-        if (command == "guidewire") {
-            guidewireMode = true;
-        }
-        else if (command == "catheter") {
-            guidewireMode = false;
-        }
-    }
-    else {
-        if (digitalRead(MODE_SWITCH) == LOW) {
-            guidewireMode = true;
-        }
-        else if (digitalRead(MODE_SWITCH) == HIGH) {
-            guidewireMode = false;
-        }
+void checkStart() {
+    if (!motorsEnabled && (Data.control == ControlCommand::START)){
+        driver1.enable();
+        driver2.enable();
+        driver3.enable();
+
+        motorsEnabled = true;
     }
 }
 
-void readSpeedButtons() {
+void readSpeed() {
     static bool lastUpReading = HIGH;
     static bool lastDownReading = HIGH;
 
@@ -300,28 +373,20 @@ void readSpeedButtons() {
     bool upRead = digitalRead(UP_SPEED);
     bool downRead = digitalRead(DOWN_SPEED);
 
-    if (UIControl){
+    if (source == ControlSource::UI ){
         int speedChange = Data.speed - previousUISpeed;
 
-        if (Data.speed > previousUISpeed){
-            CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
+        CONTROL_VELOCITY += speedChange * SPEED_INCREMENT;
 
-            if (CONTROL_VELOCITY > 5.0f) {
-                CONTROL_VELOCITY = 5.0f;
-            }
-
-            previousUISpeed = Data.speed;
+        if (CONTROL_VELOCITY > MAX_VELOCITY) {
+            CONTROL_VELOCITY = MAX_VELOCITY;
         }
-        else if (Data.speed < previousUISpeed){
 
-            CONTROL_VELOCITY -= speedChange * SPEED_INCREMENT;
-
-            if (CONTROL_VELOCITY < 0.0f) {
-                CONTROL_VELOCITY = 0.0f;
-            }
-
-            previousUISpeed = Data.speed;
+        if (CONTROL_VELOCITY < 0.0f) {
+            CONTROL_VELOCITY = 0.0f;
         }
+
+        previousUISpeed = Data.speed;
     }
     else {
         if (upRead != lastUpReading) {
@@ -369,72 +434,46 @@ void readSpeedButtons() {
     }
 }
 
-void readControls(){
-    target_velocity1 = 0.0f;
-    target_velocity2 = 0.0f;
-    target_velocity3 = 0.0f;
+void readControls() {
 
-    if (UIControl){
-        if (guidewireMode)
-        {
-            if (Data.control == "PUSH"){
+    if (!motorsEnabled) {
+        return;
+    }
+
+    if (Data.mode == OperatingMode::GUIDEWIRE) {
+        switch (Data.control) {
+            case ControlCommand::PUSH:
                 target_velocity1 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "PULL"){
-                target_velocity1 = -CONTROL_VELOCITY;
-            }
+                break;
 
-            if (Data.control == "ROTATE-CW"){
+            case ControlCommand::PULL:
+                target_velocity1 = -CONTROL_VELOCITY;
+                break;
+
+            case ControlCommand::ROTATE_CW:
                 target_velocity2 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "ROTATE-ACW"){
+                break;
+
+            case ControlCommand::ROTATE_ACW:
                 target_velocity2 = -CONTROL_VELOCITY;
-            }
-        }
-        else
-        {
-            if (Data.control == "PUSH"){
-                target_velocity3 = CONTROL_VELOCITY;
-            }
-            else if (Data.control == "PULL"){
-                target_velocity3 = -CONTROL_VELOCITY;
-            }
+                break;
+
+            default:
+                break;
         }
     }
     else {
-        if (guidewireMode)
-        {
-            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
-                target_velocity1 = 0.0f;
-            }
-            else if (!digitalRead(BTN_FORWARD)){
-                target_velocity1 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_BACK)){
-                target_velocity1 = -CONTROL_VELOCITY;
-            }
-
-            if (!digitalRead(BTN_CW) && !digitalRead(BTN_CCW)){
-                target_velocity2 = 0.0f;
-            }
-            else if (!digitalRead(BTN_CW)){
-                target_velocity2 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_CCW)){
-                target_velocity2 = -CONTROL_VELOCITY;
-            }
-        }
-        else
-        {
-            if (!digitalRead(BTN_FORWARD) && !digitalRead(BTN_BACK)){
-                target_velocity3 = 0.0f;
-            }
-            else if (!digitalRead(BTN_FORWARD)){
+        switch (Data.control) {
+            case ControlCommand::PUSH:
                 target_velocity3 = CONTROL_VELOCITY;
-            }
-            else if (!digitalRead(BTN_BACK)){
+                break;
+
+            case ControlCommand::PULL:
                 target_velocity3 = -CONTROL_VELOCITY;
-            }
+                break;
+
+            default:
+                break;
         }
     }
 }
@@ -473,9 +512,9 @@ void setup() {
     Serial.begin(115200);
     delay(1000);
 
-    pinMode(ESTOP, INPUT_PULLUP);
+    pinMode(BTN_STOP, INPUT_PULLUP);
     pinMode(MODE_SWITCH, INPUT_PULLUP);
-    pinMode(START, INPUT_PULLUP);
+    pinMode(BTN_START, INPUT_PULLUP);
 
     pinMode(UP_SPEED, INPUT_PULLUP);
     pinMode(DOWN_SPEED, INPUT_PULLUP);
@@ -545,13 +584,18 @@ void setup() {
 
 void loop() {
     
-    readCommunication();
+    readUICommunication();
+
     controlMethod();
-    start();
-    checkStop();
-    updateMode();
-    readSpeedButtons();
+
+    checkEmergencyStop();
+
+    checkStart();
+
+    readSpeed();
+
     readControls();
+
     currentAngleUpdate();
 
     motor1.loopFOC();
