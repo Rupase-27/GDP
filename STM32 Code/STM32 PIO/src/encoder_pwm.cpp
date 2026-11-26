@@ -109,6 +109,7 @@
 //  - Determines the target velocities of the motors based on the selected
 //    operating mode and requested control command.
 //  - In guidewire mode, Motor 1 controls linear movement and Motor 2 rotation.
+//  - Motor 2 movements restricted based on cw and acw rotation flags.
 //  - In catheter mode, Motor 3 controls linear movement.
 //  - Positive and negative velocities determine the movement direction.
 //  - Inputs: Data.mode, Data.control, CONTROL_VELOCITY, motorsEnabled.
@@ -118,12 +119,13 @@
 //  currentAngleUpdate()
 //  - Updates the angular position measurements from all three encoders.
 //  - Selects the angle of the motor currently commanded to move.
+//  - IF angle of guidewire rotation exceeds +/- 180 degrees from start flags to controller and UI.
 //  - Converts the selected motor angle from radians to degrees.
-//  - Attempts to constrain the displayed angle between 0 and 360 degrees.
-//  - The angle can be transmitted to the UI or used to calculate displacement.
+//  - Constrain the displayed angle between 0 and 360 degrees.
+//  - The degree angle transmitted to the UI or current angle used to calculate displacement.
 //  - Inputs: Encoder measurements, target motor velocities.
 //  - Updates: current_angle1, current_angle2, current_angle3,
-//             current_moving_angle.
+//             current_moving_angle, degree_moving_angle, cwFlag, acwFlag.
 //
 //  setup()
 //  - Initialises serial communication and configures physical controller inputs.
@@ -132,7 +134,7 @@
 //  - Links each motor to its corresponding driver.
 //  - Configures all motors for open-loop velocity control.
 //  - Initialises the motors and disables the drivers until a start command.
-//  - Initialises the previous encoder angle measurements.
+//  - Read startup angle of encoder for rotation and calculates limits from this.
 //  - Inputs: None.
 //  - Updates: Hardware configuration, motorsEnabled.
 //
@@ -585,6 +587,8 @@ void currentAngleUpdate() {
     cwFlag = current_angle2 <= min_rotation_limit;
     acwFlag = current_angle2 >= max_rotation_limit;
 
+    // current_moving_angle kept as un constrained variable in case we want to use it for distance later
+
     if (target_velocity1 != 0) {
         current_moving_angle = current_angle1 * 180 / PI;
     }
@@ -594,6 +598,9 @@ void currentAngleUpdate() {
     else if (target_velocity3 != 0) {
         current_moving_angle = current_angle3 * 180 / PI;
     }
+
+    // degree_moving_angle used to send back to user as easier to read
+    // fmod() returns remainder 
 
     if (current_moving_angle < 0) {
         degree_moving_angle = fmod(current_moving_angle, -360);
