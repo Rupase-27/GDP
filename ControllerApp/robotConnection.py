@@ -9,7 +9,7 @@ class RobotConnection(QObject):
     messageReceived = pyqtSignal(str)
     
     DEVICE_CODES = {ControlMode.GUIDEWIRE: "guidewire", ControlMode.CATHETER: "catheter", "speed": b'speed'}
-    COMMANDS = { "forward": "PUSH", "back": "PULL", "cw": "ROTATE-CW", "anti-cw": "ROTATE-ACW", "stop": "STOP", "release": "RELEASE", "start": "START", "switch": "SWITCH"}
+    COMMANDS = { "forward": "PUSH", "back": "PULL", "cw": "ROTATE_CW", "anti-cw": "ROTATE_ACW", "stop": "STOP", "release": "RELEASE", "start": "START", "switch": "SWITCH"}
     
     def __init__(self, parent=None):
         super().__init__(parent)
