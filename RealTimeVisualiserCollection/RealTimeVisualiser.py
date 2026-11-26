@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib
 # Threading allows data aq to run independent of the GUI
 matplotlib.use("QtAgg")
-from FBGCurvatureCalc import FBGBendingAngle
+# from FBGCurvatureCalc import FBGBendingAngle
 from RealTimeVisualiserPlotterScript import CableVisualisation
 from BendingAngleCalc import BendingAngle
 import matplotlib.pyplot as plt
