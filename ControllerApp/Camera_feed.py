@@ -13,7 +13,7 @@
 import cv2
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtGui import QImage
-from device_tracker import GuidewireCatheterTracker
+from Device_tracker import GuidewireCatheterTracker
 
 # Opens camera, has background worker thread and a communication with GUI
 class CameraThread(QThread):
