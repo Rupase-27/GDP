@@ -321,11 +321,20 @@ class MainWindow(QMainWindow):
         right = QVBoxLayout()
         self.camera_panel = PlaceholderPanel("Camera")
         self.guidewire_state = PlaceholderPanel("Guidewire Shape")
-        self.logs = QGroupBox("Log")
+        self.comms = QHBoxLayout()
+        self.logs = QGroupBox("Logs")
+        self.messages = QGroupBox("Incoming")
+        
         log_lay = QVBoxLayout(self.logs)
         self.log = QTextEdit(readOnly=True)
         log_lay.addWidget(self.log)
+        message_lay = QVBoxLayout(self.messages)
+        self.message = QTextEdit(readOnly=True)
+        message_lay.addWidget(self.message)
+        
         self.controls.log_message.connect(self.add_log)
+        self.comms.addWidget(self.logs)
+        self.comms.addWidget(self.messages)
         
         # By default uses an example file
         if guidewire_fig is not None:
@@ -338,7 +347,7 @@ class MainWindow(QMainWindow):
         right.addWidget(self.camera_panel, 2)
         right.addWidget(self.guidewire_state, 3)
         # right.addWidget(self.logs, 1)
-        left.addWidget(self.logs, 1)
+        left.addLayout(self.comms, 1)
         
         root.addLayout(left, 1)
         root.addLayout(right, 1)
@@ -349,6 +358,10 @@ class MainWindow(QMainWindow):
         # self.log.append(f"[{stamp}] {message}") # With timestamp if wanted
         self.log.append(message)
         self.log.verticalScrollBar().setValue(self.log.verticalScrollBar().maximum())
+        
+    def add_message(self, message: str):
+        self.message.append(message)
+        self.message.verticalScrollBar().setValue(self.message.verticalScrollBar().maximum())
 
 # Now for just running on its own for testing
 # Do not care if it's removed, shouldn't impact anything

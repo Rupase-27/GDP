@@ -49,7 +49,8 @@ class MainApp(QObject):
         
         # From robot to UI
         self.connection.status.connect(self.ui.add_log)
-        self.connection.messageReceived.connect(lambda msg:self.ui.add_log(f"Received: {msg}"))
+        # self.connection.messageReceived.connect(lambda msg:self.ui.add_log(f"Received: {msg}"))
+        self.connection.messageReceived.connect(lambda msg:self.ui.add_message(f"Received: {msg}"))
         
         self.mode = self.controls.controlling.value
         
