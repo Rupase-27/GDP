@@ -305,10 +305,10 @@ ControlCommand parseControl(const string& value) {
     else if (value == "PULL") {
         return ControlCommand::PULL;
     }
-    else if (value == "ROTATE-CW") {
+    else if (value == "ROTATE_CW") {
         return ControlCommand::ROTATE_CW;
     }
-    else if (value == "ROTATE-ACW") {
+    else if (value == "ROTATE_ACW") {
         return ControlCommand::ROTATE_ACW;
     }
     else if (value == "SWITCH"){
@@ -340,12 +340,9 @@ void readUICommunication() {
                 pos2 != string::npos &&
                 pos3 != string::npos) {
 
-                string sourceString =
-                    command.substr(0, pos1);
-
-                string modeString = command.substr(pos1 + 1, pos2 - pos1 - 1);
-                string controlString = command.substr(pos2 + 1, pos3 - pos2 - 1);
-                string speedString = command.substr(pos3 + 1);
+                string modeString = command.substr(0, pos1);
+                string controlString = command.substr(pos1 + 1, pos2 - pos1 - 1);
+                string speedString = command.substr(pos2 + 1);
 
                 if (speedString.length() == 1 &&
                     speedString[0] >= '0' &&
