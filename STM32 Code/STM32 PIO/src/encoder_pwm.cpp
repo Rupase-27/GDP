@@ -188,7 +188,7 @@ using namespace std;
 #define BTN_CW PB12
 #define BTN_CCW PB11
 
-const unsigned long PRINT_INTERVAL = 100;
+const unsigned long PRINT_INTERVAL = 10000;
 const unsigned long DEBOUNCE_TIME = 50;
 const float MAX_VELOCITY = 0.2f;
 const float SPEED_INCREMENT = 0.01f;
@@ -313,7 +313,7 @@ ControlCommand parseControl(const string& value) {
     }
     else if (value == "SWITCH"){
         // switching between control and ui
-        UIController = ~UIController;
+        UIController = !UIController;
         return ControlCommand::SWITCH;
     }
 
@@ -334,11 +334,9 @@ void readUICommunication() {
 
             size_t pos1 = command.find(' ');
             size_t pos2 = command.find(' ', pos1 + 1);
-            size_t pos3 = command.find(' ', pos2 + 1);
 
             if (pos1 != string::npos &&
-                pos2 != string::npos &&
-                pos3 != string::npos) {
+                pos2 != string::npos) {
 
                 string modeString = command.substr(0, pos1);
                 string controlString = command.substr(pos1 + 1, pos2 - pos1 - 1);
@@ -347,9 +345,9 @@ void readUICommunication() {
                 if (speedString.length() == 1 &&
                     speedString[0] >= '0' &&
                     speedString[0] <= '9') {
-
+                    
                     Data.mode = parseMode(modeString);
-                    Data.control = parseControl(controlString);
+                    Data.control = parseControl(controlString); 
                     Data.speed = speedString[0] - '0';
                 }
                 else {
@@ -368,44 +366,6 @@ void readUICommunication() {
     }
 }
 
-void readButtonInput() {
-
-    if (digitalRead(BTN_STOP) == LOW) {
-        Data.control = ControlCommand::STOP;
-        return;
-    }
-
-    if (!motorsEnabled && digitalRead(BTN_START) == LOW) {
-        Data.control = ControlCommand::START;
-        return;
-    }
-
-    // only going to be used when controller inputs read from i.e control method BUTTONS
-    if (digitalRead(MODE_SWITCH) == HIGH){
-        OperatingMode::CATHETER;
-    }   
-    else {
-        OperatingMode::GUIDEWIRE;
-    }
-
-    if (!digitalRead(BTN_FORWARD) && digitalRead(BTN_BACK)) {
-        Data.control = ControlCommand::PUSH;
-    }
-    else if (!digitalRead(BTN_BACK) && digitalRead(BTN_FORWARD)) {
-        Data.control = ControlCommand::PULL;
-    }
-    else if (!digitalRead(BTN_CW) && digitalRead(BTN_CCW)) {
-        Data.control = ControlCommand::ROTATE_CW;
-    }
-    else if (!digitalRead(BTN_CCW) && digitalRead(BTN_CW)) {
-        Data.control = ControlCommand::ROTATE_ACW;
-    }
-    else {
-        Data.control = ControlCommand::RELEASE;
-    }
-    
-}
-
 void controlMethod() {
     if (Data.control == ControlCommand::SWITCH) {
         if (UIController){
@@ -413,19 +373,69 @@ void controlMethod() {
         }
         else {
             source = ControlSource::BUTTON;
-            readButtonInput();
         }
     }
 }
 
-void checkEmergencyStop() {
-    if (motorsEnabled && (Data.control == ControlCommand::STOP)) {
-        driver1.disable();
-        driver2.disable();
-        driver3.disable();
+void readButtonInput() {
 
-        motorsEnabled = false;
+    Serial.print("STOP PIN: ");
+    Serial.println(digitalRead(BTN_STOP));
+
+    if (!digitalRead(BTN_STOP) == HIGH) {
+            Data.control = ControlCommand::STOP;
+            return;
+        }
+
+    if (source == ControlSource::BUTTON) {
+
+        if (!motorsEnabled && !digitalRead(BTN_START) == HIGH) {
+            Data.control = ControlCommand::START;
+            return;
+        }
+
+        // only going to be used when controller inputs read from i.e control method BUTTONS
+        if (digitalRead(MODE_SWITCH) == HIGH){
+            Data.mode = OperatingMode::CATHETER;
+        }   
+        else {
+            Data.mode = OperatingMode::GUIDEWIRE;
+        }
+
+        if (!digitalRead(BTN_FORWARD) && digitalRead(BTN_BACK)) {
+            Data.control = ControlCommand::PUSH;
+        }
+        else if (!digitalRead(BTN_BACK) && digitalRead(BTN_FORWARD)) {
+            Data.control = ControlCommand::PULL;
+        }
+        else if (!digitalRead(BTN_CW) && digitalRead(BTN_CCW)) {
+            Data.control = ControlCommand::ROTATE_CW;
+        }
+        else if (!digitalRead(BTN_CCW) && digitalRead(BTN_CW)) {
+            Data.control = ControlCommand::ROTATE_ACW;
+        }
+        else {
+            Data.control = ControlCommand::RELEASE;
+        }
         
+    }
+    
+}
+
+void checkEmergencyStop() {
+    if (Data.control == ControlCommand::STOP) {
+        target_velocity1 = 0.0f;
+        target_velocity2 = 0.0f;
+        target_velocity3 = 0.0f;
+
+        if (motorsEnabled) {
+            driver1.disable();
+            driver2.disable();
+            driver3.disable();
+
+            motorsEnabled = false;
+        }
+
         command.clear();
     }
 }
@@ -695,6 +705,8 @@ void loop() {
     readUICommunication();
 
     controlMethod();
+
+    readButtonInput();
 
     checkEmergencyStop();
 
