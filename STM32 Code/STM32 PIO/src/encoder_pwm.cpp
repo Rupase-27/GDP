@@ -368,18 +368,6 @@ void readUICommunication() {
     }
 }
 
-void controlMethod() {
-    if (Data.control == ControlCommand::SWITCH) {
-        if (UIController){
-            source = ControlSource::UI;
-        }
-        else {
-            source = ControlSource::BUTTON;
-            readButtonInput();
-        }
-    }
-}
-
 void readButtonInput() {
 
     if (digitalRead(BTN_STOP) == LOW) {
@@ -416,6 +404,18 @@ void readButtonInput() {
         Data.control = ControlCommand::RELEASE;
     }
     
+}
+
+void controlMethod() {
+    if (Data.control == ControlCommand::SWITCH) {
+        if (UIController){
+            source = ControlSource::UI;
+        }
+        else {
+            source = ControlSource::BUTTON;
+            readButtonInput();
+        }
+    }
 }
 
 void checkEmergencyStop() {
