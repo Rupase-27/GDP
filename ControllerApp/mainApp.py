@@ -65,7 +65,8 @@ class MainApp(QObject):
     # Commands
     def sendGo(self, command):
         if command == "release":
-            self.sendRelease()
+            # self.sendRelease()
+            self.connection.move(self.mode, "release", 0)
             return
         # mode = self.controls.controlling.value
         if self.mode == ControlMode.CATHETER and command in ROTATE_ACTIONS:
@@ -76,13 +77,16 @@ class MainApp(QObject):
         
     def sendStop(self):
         self.currentAction = None
-        self.connection.stop()
+        # self.connection.stop()
+        self.connection.move(self.mode, "stop", 0)
+        
             
     def sendRelease(self):
         self.connection.release()
         
     def sendSwitch(self):
-        self.connection.switch()
+        # self.connection.switch()
+        self.connection.move(self.mode, "switch", 0)
         
     def speedChange(self, value):
         # if self.currentAction is not None:
