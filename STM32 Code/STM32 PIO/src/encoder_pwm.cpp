@@ -379,9 +379,6 @@ void controlMethod() {
 
 void readButtonInput() {
 
-    Serial.print("STOP PIN: ");
-    Serial.println(digitalRead(BTN_STOP));
-
     if (!digitalRead(BTN_STOP) == HIGH) {
             Data.control = ControlCommand::STOP;
             return;
